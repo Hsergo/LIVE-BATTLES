@@ -72,6 +72,38 @@ jobs:
           }
           Write-Host 'Export du jeu Windows reussi.'
 
+      - name: Verifier le demarrage du jeu et les evenements locaux
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bridge = Start-Process -FilePath (Get-Command node).Source -ArgumentList 'index.js' -WorkingDirectory (Join-Path $PWD 'bridge') -PassThru -WindowStyle Hidden
+          try {
+            Start-Sleep -Seconds 2
+            $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8765/health' -Method Get
+            if (-not $health.ok) { throw 'Passerelle locale hors service' }
+            $body = '{"type":"comment","username":"DemoRouge","text":"!join red"}'
+            $response = Invoke-RestMethod -Uri 'http://127.0.0.1:8765/simulate' -Method Post -ContentType 'application/json' -Body $body
+            if (-not $response.ok) { throw 'Simulation commande echouee' }
+            $body = '{"type":"gift","username":"DemoRouge","gift_name":"Rose","count":3}'
+            $response = Invoke-RestMethod -Uri 'http://127.0.0.1:8765/simulate' -Method Post -ContentType 'application/json' -Body $body
+            if (-not $response.ok) { throw 'Simulation cadeau echouee' }
+            $exe = Join-Path $PWD 'dist/game/LiveBattle.exe'
+            $log = Join-Path $PWD 'runtime-smoke.log'
+            $game = Start-Process -FilePath $exe -ArgumentList @('--headless', '--quit-after', '120', '--log-file', $log) -Wait -PassThru
+            if ($game.ExitCode -ne 0) { throw "Le jeu exporte a quitte avec le code $($game.ExitCode)" }
+            if (Test-Path $log) {
+              Get-Content $log | Select-Object -Last 80
+              if (Select-String -Path $log -Pattern 'SCRIPT ERROR|Parse Error|Invalid call' -Quiet) {
+                throw 'Erreurs Godot detectees au demarrage'
+              }
+            }
+            Write-Host 'Smoke test Windows termine sans erreur.'
+          } finally {
+            if ($bridge -and -not $bridge.HasExited) {
+              Stop-Process -Id $bridge.Id -Force -ErrorAction SilentlyContinue
+            }
+          }
+
       - name: Packager la version autonome
         shell: pwsh
         run: |
