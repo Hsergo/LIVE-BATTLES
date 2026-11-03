@@ -13,7 +13,7 @@ var terrain: Node3D
 var camera: Camera3D
 var sunlight: DirectionalLight3D
 var water: MeshInstance3D
-var segments: Array[MeshInstance3D] = []
+var segments: Array[Node3D] = []
 var cranes: Array[Node3D] = []
 var clouds: Array[Node3D] = []
 var boats: Array[Node3D] = []
@@ -34,6 +34,8 @@ var last_saved := 0
 var last_event := 0
 var total_spawned := 0
 var water_foam: Array[MeshInstance3D] = []
+var roster_clock := 0.0
+var cached_roster_size := 0
 
 func initialize(model: RefCounted, is_live: bool) -> void:
 	state = model
@@ -504,7 +506,12 @@ func _process(delta: float) -> void:
 	for index in range(cranes.size()):
 		cranes[index].rotation.y = sin(clock*0.35)*0.13
 	_update_segments(float(state.get("progress")))
-	_sync_workers()
+	roster_clock += d
+	var roster_size: int = int(state.get("participants").size())
+	if roster_clock > 1.0 or roster_size != cached_roster_size:
+		roster_clock = 0.0
+		cached_roster_size = roster_size
+		_sync_workers()
 	_animate_workers(d)
 	_animate_rescues()
 
