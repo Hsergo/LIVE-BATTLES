@@ -12,6 +12,12 @@ const BRIDGE_RIGHT := 558.0
 const BRIDGE_Y := 692.0
 
 var state: RefCounted
+var world_viewport: SubViewport
+var world_sprite: Sprite2D
+var world_3d: Node3D
+var enable_3d := true
+var action_headline := ""
+var action_headline_life := 0.0
 var agents: RefCounted
 var agent_message := ""
 var agent_message_life := 0.0
@@ -65,10 +71,30 @@ func _ready() -> void:
 	music = load("res://scripts/audio_fx.gd").new()
 	add_child(music)
 	_build_controls()
+	_setup_world_3d()
 	_load_preferences()
 	_open_socket()
 	set_process(true)
 	queue_redraw()
+
+func _setup_world_3d() -> void:
+	world_viewport = SubViewport.new()
+	world_viewport.name = "ThreeDimensionalRender"
+	world_viewport.size = Vector2i(720,1280)
+	world_viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	world_viewport.own_world_3d = true
+	world_viewport.transparent_bg = false
+	add_child(world_viewport)
+	world_3d = load("res://scripts/world_3d.gd").new()
+	world_viewport.add_child(world_3d)
+	world_3d.call("initialize",state,false)
+	world_sprite = Sprite2D.new()
+	world_sprite.name = "ThreeDimensionalBackdrop"
+	world_sprite.centered = false
+	world_sprite.texture = world_viewport.get_texture()
+	world_sprite.z_index = -100
+	world_sprite.visible = enable_3d
+	add_child(world_sprite)
 
 func _open_socket() -> void:
 	ws = WebSocketPeer.new()
@@ -91,6 +117,7 @@ func _process(delta: float) -> void:
 		if float(item["time"]) <= 0.0:
 			fx.erase(item)
 	banner_life = maxf(0,banner_life-d)
+	action_headline_life = maxf(0.0,action_headline_life-d)
 	if helicopter_active:
 		helicopter_time += d
 		if helicopter_time > 5.0:
@@ -118,7 +145,14 @@ func _process(delta: float) -> void:
 		banner = "UN HABITANT SAUVE !"
 		banner_life = 2.2
 	if state.get("events").size() > 0:
-		var e: Dictionary = state.get("events")[0]
+		var events: Array = state.get("events")
+		if world_3d != null:
+			for index in range(events.size()-1,-1,-1):
+				var scene_event: Dictionary = events[index]
+				if int(scene_event.get("id",0)) > int(world_3d.get("last_event")):
+					world_3d.call("record_event",scene_event)
+					world_3d.set("last_event",int(scene_event.get("id",0)))
+		var e: Dictionary = events[0]
 		if int(e.get("id",0)) != last_event:
 			last_event = int(e.get("id",0))
 			var kind := str(e.get("kind",""))
@@ -210,6 +244,8 @@ func _handle_packet(raw: String) -> void:
 func _switch_mode() -> void:
 	if game_mode == "DEMO":
 		game_mode = "LIVE"
+		if world_3d != null:
+			world_3d.call("set_live",true)
 		live_auto_hide = false
 		state.call("configure",false)
 		agents.call("reset")
@@ -217,6 +253,8 @@ func _switch_mode() -> void:
 		banner_life = 3.0
 	else:
 		game_mode = "DEMO"
+		if world_3d != null:
+			world_3d.call("set_live",false)
 		admin_visible = true
 		state.call("configure",true)
 		agents.call("reset")
@@ -344,7 +382,7 @@ func _build_controls() -> void:
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	stack.add_child(status_label)
 	var hint := Label.new()
-	hint.text = "F11 : plein ecran    |    F10 : masquer les commandes    |    F9 : son"
+	hint.text = "F7 : camera 360  |  F6 : vue 3D/2D  |  F10 : commandes  |  F9 : son"
 	hint.add_theme_font_size_override("font_size",13)
 	hint.add_theme_color_override("font_color",Color("#8c9dac"))
 	stack.add_child(hint)
@@ -371,6 +409,13 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	elif event.keycode == KEY_F9:
 		if music != null:
 			music.call("toggle_sound")
+	elif event.keycode == KEY_F7:
+		if world_3d != null:
+			world_3d.call("camera_mode_next")
+	elif event.keycode == KEY_F6:
+		enable_3d = not enable_3d
+		if world_sprite != null:
+			world_sprite.visible = enable_3d
 	elif event.keycode == KEY_F11:
 		var window := get_window()
 		window.mode = Window.MODE_WINDOWED if window.mode == Window.MODE_FULLSCREEN else Window.MODE_FULLSCREEN
@@ -390,6 +435,9 @@ func _round_progress(y: float, fraction: float, main_color: Color, label: String
 	_text(label,Vector2(30,y-9),18,Color("#c5e2ef"))
 
 func _draw() -> void:
+	if enable_3d and world_3d != null:
+		_draw_hud_3d()
+		return
 	_draw_base()
 	var zoom := 1.14 + sin(clock*0.18)*0.013
 	var camera_pan := Vector2(
@@ -877,3 +925,45 @@ func _draw_lighthouse_scene() -> void:
 		_poly([Vector2(x-25,y),Vector2(x+25,y),Vector2(x+14,y+16),Vector2(x-13,y+16)],Color("#d49b6d"))
 		draw_line(Vector2(x,y-34),Vector2(x,y),Color("#e9d8b4"),3.0)
 		_poly([Vector2(x+1,y-33),Vector2(x+1,y-3),Vector2(x+17,y-3)],Color("#e9f8e2"))
+
+func _draw_hud_3d() -> void:
+	# Native 3D from a dedicated SubViewport; only HUD is drawn in 2D.
+	_draw_header()
+	_draw_scene_legend()
+	_draw_emergency_card()
+	_draw_agent_message()
+	_draw_3d_leaderboards()
+	_draw_status_3d()
+	_draw_footer()
+	if banner_life > 0:
+		_rect(33,854,654,67,Color("#071c2be9"))
+		_rect(33,854,7,67,Color("#ffd67d"))
+		_text(banner.substr(0,49),Vector2(50,894),21,Color("#ffe9bd"))
+	if str(state.get("status")) == "RESULT":
+		_draw_result()
+	if flash > 0.0:
+		_rect(0,236,720,720,Color(1.0,0.53,0.31,flash*0.17))
+
+func _draw_3d_leaderboards() -> void:
+	var people: int = int(state.get("participants").size())
+	var visible_count: int = int(world_3d.call("visible_workers")) if world_3d != null else 0
+	_rect(22,737,676,112,Color("#082334e1"))
+	_rect(22,737,676,5,Color("#ffcf79"))
+	_text("CHANTIER ACTIF : %d PARTICIPANTS  |  %d OUVRIERS A L'ECRAN" % [people,visible_count],
+		Vector2(34,766),17,Color("#eff8ef"))
+	var builders: Array[String] = state.call("top_builders",3)
+	var donors: Array[String] = state.call("top_donors",3)
+	_text("MEILLEURS CONSTRUCTEURS",Vector2(34,790),16,Color("#a1dfd0"))
+	_text("  /  ".join(builders) if not builders.is_empty() else "EN ATTENTE D'ACTIONS",
+		Vector2(34,809),16,Color("#fff0ba"),false,645)
+	_text("MEILLEURS DONATEURS",Vector2(34,830),16,Color("#a1dfd0"))
+	_text("  /  ".join(donors) if not donors.is_empty() else "AUCUN CADEAU NECESSAIRE",
+		Vector2(270,830),16,Color("#ffe2a1"),false,411)
+	# The contribution is attributed to the real actor, not to a synthetic bot.
+
+func _draw_status_3d() -> void:
+	if world_3d == null:
+		return
+	var orbit: float = float(world_3d.call("camera_turn_degrees"))
+	_text("CAMERA 360 : %d DEG   •   F7 POUR BLOQUER" % int(orbit),
+		Vector2(30,728),14,Color("#dcebe6"))

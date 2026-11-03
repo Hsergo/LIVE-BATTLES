@@ -21,6 +21,13 @@ func _run() -> void:
 	check(main.get("state") != null,"Modele de mission injecte")
 	check(str(main.get("game_mode"))=="DEMO","Mode demonstration par defaut et explicite")
 	check(main.get("act_buttons").size()==3,"Commandes de test presentes")
+	var world: Node3D = main.get("world_3d") as Node3D
+	check(world != null,"Moteur graphique 3D instancie")
+	check(main.get("enable_3d"),"Affichage 3D actif par defaut")
+	check(world.get("camera") != null,"Camera 360 degres disponible")
+	check(int(world.call("visible_workers")) >= 6,"Plusieurs ouvriers visibles en demonstration")
+	check(world.get("segments").size() >= 10,"Construction en 3D composee de vraies sections")
+
 	await create_timer(0.3).timeout
 	main.call("_switch_mode")
 	check(str(main.get("game_mode"))=="LIVE","Mode LIVE accessible")
@@ -40,5 +47,12 @@ func _run() -> void:
 	model.call("_start_mission",false)
 	check(str(model.call("scenario_info").get("id"))=="lighthouse","Scene de phare disponible")
 	check(model.get("participants").has("SpectateurLive"),"Les vrais participants restent inscrits entre missions")
+	for i in range(55):
+		model.call("join","user_%d" % i)
+	world.call("_sync_workers")
+	check(int(world.call("visible_workers")) >= 12,"Le chantier ne reste pas a deux ou trois ouvriers")
+	check(int(world.call("visible_workers")) <= 48,"Limite de rendu 3D pour assurer les performances")
+	check(int(world.call("live_participants")) >= 56,"Les joueurs non affiches restent comptabilises")
+
 	print("VIEW TEST RESULT: "+("FAILED" if failed else "SUCCESS"))
 	quit(1 if failed else 0)
