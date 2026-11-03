@@ -1,0 +1,139 @@
+name: MISSION SAUVETAGE LIVE — Windows
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'rescue/**'
+      - '.github/workflows/rescue-windows.yml'
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Recuperer le depot
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Verifier la passerelle TikTok
+        working-directory: rescue/bridge
+        run: |
+          npm install --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw "npm install echoue" }
+          npm test
+          if ($LASTEXITCODE -ne 0) { throw "Tests Node echoues" }
+
+      - name: Preparer Godot 4.5.2 et templates Windows
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = '4.5.2-stable'
+          $url = "https://github.com/godotengine/godot/releases/download/$version"
+          New-Item -ItemType Directory -Force tools/rescue-godot | Out-Null
+          Invoke-WebRequest -Uri "$url/Godot_v4.5.2-stable_win64.exe.zip" -OutFile godot.zip
+          Expand-Archive godot.zip -DestinationPath tools/rescue-godot -Force
+          Invoke-WebRequest -Uri "$url/Godot_v4.5.2-stable_export_templates.tpz" -OutFile templates.tpz
+          Copy-Item templates.tpz templates.zip
+          Expand-Archive templates.zip -DestinationPath tools/rescue-templates -Force
+          $destination = Join-Path $env:APPDATA 'Godot\export_templates\4.5.2.stable'
+          New-Item -ItemType Directory -Force $destination | Out-Null
+          Copy-Item tools/rescue-templates/templates/* $destination -Recurse -Force
+
+      - name: Tester le modele des missions
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
+          if (-not $godot) { throw 'Godot console non trouve' }
+          & $godot.FullName --headless --path rescue/game --script res://tests/mission_rules.gd
+          if ($LASTEXITCODE -ne 0) { throw 'Regles de la mission invalides' }
+
+      - name: Importer et exporter le jeu Windows
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
+          if (-not $godot) { throw 'Godot console non trouve' }
+          $project = (Resolve-Path rescue/game).Path
+          New-Item -ItemType Directory -Force dist-rescue/game | Out-Null
+          & $godot.FullName --headless --path $project --import --verbose
+          if ($LASTEXITCODE -ne 0) { Write-Warning "Import renvoie $LASTEXITCODE" }
+          & $godot.FullName --headless --path $project --export-release 'Windows Desktop' (Join-Path $PWD 'dist-rescue/game/MissionSauvetage.exe')
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path dist-rescue/game/MissionSauvetage.exe)) { throw 'Export Windows du jeu echoue' }
+
+      - name: Tester la scene et l'interaction locale
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
+          & $godot.FullName --headless --path rescue/game --script res://tests/view_smoke.gd
+          if ($LASTEXITCODE -ne 0) { throw 'Test de scene / TikTok echoue' }
+          $bridge = Start-Process (Get-Command node).Source -ArgumentList 'index.js' -WorkingDirectory (Join-Path $PWD 'rescue/bridge') -WindowStyle Hidden -PassThru
+          try {
+            Start-Sleep -Seconds 2
+            $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8766/health'
+            if (-not $health.ok) { throw 'Serveur local hors service' }
+            $body = '{"type":"comment","username":"TestConstructeur","text":"!join"}'
+            $post = Invoke-RestMethod -Uri 'http://127.0.0.1:8766/simulate' -Method Post -ContentType 'application/json' -Body $body
+            if (-not $post.ok) { throw 'Commandes de simulation en echec' }
+            $body = '{"type":"gift","username":"TestConstructeur","gift_name":"Rose","count":3}'
+            $post = Invoke-RestMethod -Uri 'http://127.0.0.1:8766/simulate' -Method Post -ContentType 'application/json' -Body $body
+            if (-not $post.ok) { throw 'Cadeau de simulation en echec' }
+            $exe = Join-Path $PWD 'dist-rescue/game/MissionSauvetage.exe'
+            $log = Join-Path $PWD 'rescue-smoke.log'
+            $p = Start-Process $exe -ArgumentList @('--headless','--quit-after','180','--log-file',$log) -PassThru -Wait
+            if (Test-Path $log) { Get-Content $log | Select-Object -Last 120 }
+            if ($p.ExitCode -ne 0) { throw "Executable non fonctionnel: $($p.ExitCode)" }
+            if (Test-Path $log) {
+              if (Select-String -Path $log -Pattern 'SCRIPT ERROR|Parse Error|Invalid call' -Quiet) {
+                throw 'Erreur Godot detectee dans le jeu Windows'
+              }
+            }
+          } finally {
+            if ($bridge -and -not $bridge.HasExited) { Stop-Process $bridge.Id -Force -ErrorAction SilentlyContinue }
+          }
+
+      - name: Assembler le jeu autonome
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force dist-rescue/runtime,dist-rescue/bridge,dist-rescue/launcher,release-rescue | Out-Null
+          Copy-Item (Get-Command node).Source dist-rescue/runtime/node.exe
+          Copy-Item rescue/bridge/index.js dist-rescue/bridge/index.js
+          Copy-Item rescue/bridge/rules.js dist-rescue/bridge/rules.js
+          Copy-Item rescue/bridge/gifts.json dist-rescue/bridge/gifts.json
+          Copy-Item rescue/bridge/node_modules dist-rescue/bridge/node_modules -Recurse
+          Copy-Item rescue/launcher/start.ps1 dist-rescue/launcher/start.ps1
+          Copy-Item rescue/launcher/DEMARRER-MISSION-SAUVETAGE.cmd dist-rescue/DEMARRER-MISSION-SAUVETAGE.cmd
+          Copy-Item rescue/README.md dist-rescue/README.md
+          Compress-Archive dist-rescue/* release-rescue/MISSION-SAUVETAGE-LIVE-Portable-x64.zip -Force
+
+      - name: Installer Inno Setup
+        run: |
+          choco install innosetup -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup indisponible' }
+
+      - name: Fabriquer l'installateur Windows
+        run: |
+          $compilers = @(
+            'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
+            'C:\Program Files\Inno Setup 6\ISCC.exe',
+            'C:\Program Files\Inno Setup 7\ISCC.exe',
+            'C:\Program Files (x86)\Inno Setup 7\ISCC.exe'
+          )
+          $compiler = $compilers | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $compiler) { throw 'Compilateur Inno non trouve' }
+          & $compiler rescue/installer/mission-sauvetage.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Installateur Windows echoue' }
+          if (-not (Test-Path release-rescue/MISSION-SAUVETAGE-LIVE-Setup-x64.exe)) { throw 'Fichier Setup non cree' }
+
+      - name: Livrer le jeu Windows
+        uses: actions/upload-artifact@v4
+        with:
+          name: MISSION-SAUVETAGE-LIVE-WINDOWS
+          path: |
+            release-rescue/MISSION-SAUVETAGE-LIVE-Setup-x64.exe
+            release-rescue/MISSION-SAUVETAGE-LIVE-Portable-x64.zip
+          if-no-files-found: error
