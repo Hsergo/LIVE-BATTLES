@@ -456,7 +456,7 @@ func _worker(name: String) -> Dictionary:
 		limbs[side+"_leg"] = leg
 	# Each active worker gets an identifier that follows the 3D rig and faces the camera.
 	var tag := Label3D.new()
-	model_root.add_child(tag)
+	rig.add_child(tag)
 	tag.text = "@" + name.substr(0,15) if live_mode else "DEMO"
 	tag.position = Vector3(0,2.68,0)
 	tag.font_size = 46
@@ -465,7 +465,7 @@ func _worker(name: String) -> Dictionary:
 	tag.outline_size = 8
 	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	var action_tag := Label3D.new()
-	model_root.add_child(action_tag)
+	rig.add_child(action_tag)
 	action_tag.text = ""
 	action_tag.visible = false
 	action_tag.position = Vector3(0,3.16,0)
@@ -491,34 +491,39 @@ func _worker(name: String) -> Dictionary:
 		var avatar := load("res://scripts/rigged_humanoid.gd").new() as Node3D
 		rig.add_child(avatar)
 		if bool(avatar.call("setup",1.16)):
-			for part in rig.get_children():
-				if part != avatar and part != tag and part != action_tag:
-					if part is Node3D:
-						(part as Node3D).visible = false
-			# Safety clothing cues on top of the genuine skinned body.
-			_cylinder(model_root,Vector3(0,1.85,0),0.29,0.19,Color("#ffca54"))
-			_box(model_root,Vector3(0,1.76,0.19),Vector3(0.61,0.075,0.22),Color("#ffca54"))
-			_box(model_root,Vector3(-0.27,1.17,0.18),Vector3(0.075,0.62,0.06),Color("#fbd46b"))
-			_box(model_root,Vector3(0.27,1.17,0.18),Vector3(0.075,0.62,0.06),Color("#fbd46b"))
+			# Only the fallback model disappears: the skinned human and the
+			# player's nameplate remain visible as siblings under the rig.
+			model_root.visible = false
+			var equipment := Node3D.new()
+			equipment.name = "PPE_Equipment"
+			rig.add_child(equipment)
+			_cylinder(equipment,Vector3(0,2.03,0),0.31,0.19,helmet_color)
+			_box(equipment,Vector3(0,1.96,0.20),Vector3(0.65,0.09,0.25),helmet_color)
+			_box(equipment,Vector3(-0.25,1.24,0.24),Vector3(0.075,0.67,0.075),Color("#ffe7a0"))
+			_box(equipment,Vector3(0.25,1.24,0.24),Vector3(0.075,0.67,0.075),Color("#ffe7a0"))
+			_box(equipment,Vector3(0,0.91,0.25),Vector3(0.54,0.065,0.06),Color("#ffe7a0"))
 			limbs["avatar"] = avatar
-			tag.position.y = 2.44
+			limbs["equipment"] = equipment
+			tag.position.y = 2.49
+			action_tag.position.y = 2.96
 		else:
 			avatar.queue_free()
 	rig.position = _worker_position(int(limbs["slot"]))
 	return limbs
 
 func _worker_position(slot: int) -> Vector3:
-	var row := slot / 12
-	var col := slot % 12
-	var x := -18.0 + float(col)*0.9
-	var z := 7.6 + float(row)*1.13
-	return Vector3(x,0.13,z)
+	# Group the team inside the camera's readable area instead of far away.
+	var row := int(slot / 8)
+	var col := slot % 8
+	var x := -12.4 + float(col)*0.84
+	var z := -2.85 + float(row)*0.90
+	return Vector3(x,0.16,z)
 
 func _sync_workers() -> void:
 	if state == null:
 		return
 	if not live_mode:
-		for index in range(9):
+		for index in range(12):
 			var demo := "DEMO" + str(index+1)
 			if not actors.has(demo):
 				actors[demo] = _worker(demo)
@@ -605,7 +610,7 @@ func _animate_workers(delta: float) -> void:
 		var remaining := maxf(0,float(actor["action_time"])-delta)
 		actor["action_time"] = remaining
 		var tool: Node3D = actor["tool"]
-		tool.visible = remaining > 0.0 and str(actor["action"]) in ["build","repair"]
+		tool.visible = remaining > 0.0 and str(actor["action"]) in ["build","repair"] and not actor.has("avatar")
 		var nametag: Label3D = actor["label"]
 		nametag.visible = actors.size() <= 18 or remaining > 0.0 or user == focus_user
 		var action_tag: Label3D = actor["action_tag"]
@@ -644,7 +649,10 @@ func _animate_workers(delta: float) -> void:
 		(actor["right_arm"] as Node3D).rotation.x = -swing*0.8
 		(actor["left_leg"] as Node3D).rotation.x = -swing*0.35
 		(actor["right_leg"] as Node3D).rotation.x = swing*0.35
-		rig.rotation.y = lerp_angle(rig.rotation.y,0.6 if fighting else -0.25,minf(1.0,delta*2.0))
+		if moved.length_squared() > 0.0001:
+			rig.rotation.y = lerp_angle(rig.rotation.y,atan2(moved.x,moved.z),minf(1.0,delta*6.0))
+		elif fighting:
+			rig.rotation.y = lerp_angle(rig.rotation.y,0.3,minf(1.0,delta*2.0))
 		if actor.has("avatar"):
 			var avatar: Node3D = actor["avatar"]
 			if is_instance_valid(avatar):
