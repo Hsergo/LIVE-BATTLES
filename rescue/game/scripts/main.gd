@@ -321,8 +321,6 @@ func _round_progress(y: float, fraction: float, main_color: Color, label: String
 
 func _draw() -> void:
 	_draw_base()
-	_draw_header()
-	_draw_emergency_card()
 	var zoom := 1.14 + sin(clock*0.18)*0.013
 	var camera_pan := Vector2(
 		-50.0 + sin(clock*0.34)*2.6 + randf_range(-shake,shake)*11.0,
@@ -337,7 +335,9 @@ func _draw() -> void:
 	_draw_weather()
 	_draw_fx()
 	draw_set_transform(Vector2.ZERO,0.0,Vector2.ONE)
+	_draw_header()
 	_draw_scene_legend()
+	_draw_emergency_card()
 	_draw_footer()
 	if banner_life > 0:
 		_rect(50,861,620,71,Color("#0a213de8"))
