@@ -147,16 +147,23 @@ func _process(delta: float) -> void:
 	if state.get("events").size() > 0:
 		var events: Array = state.get("events")
 		if world_3d != null:
-			for index in range(events.size()-1,-1,-1):
-				var scene_event: Dictionary = events[index]
-				if int(scene_event.get("id",0)) > int(world_3d.get("last_event")):
-					world_3d.call("record_event",scene_event)
-					var actor_name := str(scene_event.get("user",""))
-					var event_kind := str(scene_event.get("kind",""))
-					if event_kind in ["build","repair","rescue","gift","power"] and not actor_name.is_empty():
-						action_headline = "@" + actor_name.substr(0,20) + "  •  " + str(scene_event.get("message","")).substr(0,43)
-						action_headline_life = 4.5
-					world_3d.set("last_event",int(scene_event.get("id",0)))
+			# Playback queue: record every accepted action even in crowded rooms.
+			# Process a fixed number per frame to avoid freezes with 50+ players.
+			var visual_timeline: Array = state.get("visual_events")
+			var processed := 0
+			for scene_event in visual_timeline:
+				if int(scene_event.get("id",0)) <= int(world_3d.get("last_event")):
+					continue
+				world_3d.call("record_event",scene_event)
+				var actor_name := str(scene_event.get("user",""))
+				var event_kind := str(scene_event.get("kind",""))
+				if event_kind in ["build","repair","rescue","gift","power"] and not actor_name.is_empty():
+					action_headline = "@" + actor_name.substr(0,20) + "  •  " + str(scene_event.get("message","")).substr(0,43)
+					action_headline_life = 4.5
+				world_3d.set("last_event",int(scene_event.get("id",0)))
+				processed += 1
+				if processed >= 12:
+					break
 		var e: Dictionary = events[0]
 		if int(e.get("id",0)) != last_event:
 			last_event = int(e.get("id",0))

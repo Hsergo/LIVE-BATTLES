@@ -3,6 +3,7 @@ extends RefCounted
 ## Aucune identité simulée n'est présentée comme un vrai spectateur en mode LIVE.
 
 const MAX_EVENTS := 8
+const MAX_VISUAL_EVENTS := 256
 const BASE_DURATION := 160.0
 const DEMO_DURATION := 108.0
 const MAX_MEMBERS := 500
@@ -50,6 +51,7 @@ var missions_cleared := 0
 var result_seconds := 0.0
 var event_id := 0
 var events: Array[Dictionary] = []
+var visual_events: Array[Dictionary] = []
 var action_sequence := 0
 var last_user := ""
 var bridge_gates := 0
@@ -76,6 +78,7 @@ func _start_mission(reset_people: bool) -> void:
 		lifetime_contribution.clear()
 	# Les spectateurs restent inscrits entre missions ; les delais de commande, non.
 	cooldowns.clear()
+	visual_events.clear()
 	scenario_index = (mission_index - 1) % SCENARIOS.size()
 	status = "RUNNING" if demo_mode or not participants.is_empty() else "WAITING"
 	total_duration = DEMO_DURATION if demo_mode else float(SCENARIOS[scenario_index]["duration"])
@@ -108,9 +111,13 @@ func _start_mission(reset_people: bool) -> void:
 
 func _note(message: String, kind: String = "info", username: String = "") -> void:
 	event_id += 1
-	events.push_front({"id":event_id, "message":message.substr(0,120), "kind":kind, "user":username, "life":4.0})
+	var event := {"id":event_id, "message":message.substr(0,120), "kind":kind, "user":username, "life":4.0}
+	events.push_front(event)
+	visual_events.append(event.duplicate())
 	if events.size() > MAX_EVENTS:
 		events.resize(MAX_EVENTS)
+	while visual_events.size() > MAX_VISUAL_EVENTS:
+		visual_events.pop_front()
 
 func join(user: String) -> bool:
 	var name := user.strip_edges().trim_prefix("@").substr(0, 24)
