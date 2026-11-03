@@ -101,48 +101,53 @@ func _sign(message: String, pos: Vector3, color: Color) -> Label3D:
 	return label
 
 func _create_civilian(index: int) -> Dictionary:
-	var person := Node3D.new()
+	var person: CharacterBody3D = load("res://scripts/character_motor_3d.gd").new()
 	person.name = "Villager_%02d" % index
 	add_child(person)
+	person.call("configure",2,0.225,1.44)
+	var visual := Node3D.new()
+	visual.name = "CivilianAppearance"
+	person.add_child(visual)
 	var is_child := index%6 == 2
 	var is_elder := index%7 == 4
-	person.scale = Vector3.ONE * (0.72 if is_child else (0.91 if is_elder else 0.99+float(index%3)*0.035))
+	visual.scale = Vector3.ONE * (0.72 if is_child else (0.91 if is_elder else 0.99+float(index%3)*0.035))
 	var skin: Color = SKIN[(index*7+2)%SKIN.size()]
 	var outfit: Color = COATS[(index*5+1)%COATS.size()]
 	var trousers: Color = PANTS[(index*3+1)%PANTS.size()]
 	var hairstyle: Color = HAIR[(index*9+3)%HAIR.size()]
 	# Human-proportioned torso and head; NPCs do not wear worker helmets.
-	_capsule(person,Vector3(0,1.16,0),0.97,0.31,outfit)
-	_capsule(person,Vector3(0,0.96,0),0.49,0.27,trousers)
-	_sphere(person,Vector3(0,1.92,0),0.28,skin)
-	var haircap := _sphere(person,Vector3(0,2.075,-0.025),0.278,hairstyle)
+	_capsule(visual,Vector3(0,1.16,0),0.97,0.31,outfit)
+	_capsule(visual,Vector3(0,0.96,0),0.49,0.27,trousers)
+	_sphere(visual,Vector3(0,1.92,0),0.28,skin)
+	var haircap := _sphere(visual,Vector3(0,2.075,-0.025),0.278,hairstyle)
 	haircap.scale = Vector3(1.04,0.56,0.99)
 	for side in [-1.0,1.0]:
-		_sphere(person,Vector3(side*0.096,1.94,0.249),0.023,Color("#24313e"))
-	_sphere(person,Vector3(0,1.87,0.262),0.036,skin.darkened(0.09))
-	_box(person,Vector3(0,1.78,0.267),Vector3(0.095,0.020,0.025),Color("#7d4f43"))
+		_sphere(visual,Vector3(side*0.096,1.94,0.249),0.023,Color("#24313e"))
+	_sphere(visual,Vector3(0,1.87,0.262),0.036,skin.darkened(0.09))
+	_box(visual,Vector3(0,1.78,0.267),Vector3(0.095,0.020,0.025),Color("#7d4f43"))
 	if index%5==0:
 		# A lightweight emergency backpack/shoulder bag.
-		_box(person,Vector3(0,1.10,-0.35),Vector3(0.48,0.66,0.26),Color("#8b866f"))
-		_box(person,Vector3(-0.20,1.14,0.035),Vector3(0.06,0.78,0.05),Color("#d9b97d"))
+		_box(visual,Vector3(0,1.10,-0.35),Vector3(0.48,0.66,0.26),Color("#8b866f"))
+		_box(visual,Vector3(-0.20,1.14,0.035),Vector3(0.06,0.78,0.05),Color("#d9b97d"))
 	if is_elder:
-		_box(person,Vector3(0.40,0.52,0.07),Vector3(0.065,1.0,0.055),Color("#bba281"))
+		_box(visual,Vector3(0.40,0.52,0.07),Vector3(0.065,1.0,0.055),Color("#bba281"))
 	var joints: Dictionary = {}
 	for limb in ["left","right"]:
 		var sign := -1.0 if limb=="left" else 1.0
 		var arm := Node3D.new()
-		person.add_child(arm)
+		visual.add_child(arm)
 		arm.position = Vector3(sign*0.36,1.47,0)
 		_capsule(arm,Vector3(0,-0.36,0),0.72,0.115,outfit.darkened(0.10))
 		_sphere(arm,Vector3(0,-0.71,0),0.105,skin)
 		joints[limb+"_arm"] = arm
 		var leg := Node3D.new()
-		person.add_child(leg)
+		visual.add_child(leg)
 		leg.position = Vector3(sign*0.15,0.77,0)
 		_capsule(leg,Vector3(0,-0.31,0),0.66,0.135,trousers)
 		_box(leg,Vector3(0,-0.66,0.105),Vector3(0.27,0.14,0.43),Color("#514c47"))
 		joints[limb+"_leg"] = leg
 	joints["node"] = person
+	joints["visual"] = visual
 	joints["id"] = index
 	joints["age"] = 0.0
 	joints["phase"] = "waiting"
@@ -152,7 +157,7 @@ func _create_civilian(index: int) -> Dictionary:
 	# elders retain distinct procedural silhouettes until suitable CC0 rigs exist.
 	if not is_child and not is_elder and index % 5 == 0:
 		var avatar := load("res://scripts/rigged_humanoid.gd").new() as Node3D
-		person.add_child(avatar)
+		visual.add_child(avatar)
 		if bool(avatar.call("setup",1.03)):
 			for visual in person.get_children():
 				if visual != avatar and visual is Node3D:
@@ -246,9 +251,7 @@ func sync(delta: float) -> void:
 		actor["phase"] = phase
 		actor["age"] = float(actor["age"])+d
 		var t := float(actor["age"])
-		var old := rig.position
-		rig.position = rig.position.lerp(target,minf(1.0,d*(8.0 if walk else 4.0)))
-		var movement := rig.position-old
+		var movement: Vector3 = rig.call("move_to",target,8.0 if walk else 3.3,d)
 		if movement.length_squared()>0.00003 and walk:
 			rig.rotation.y = lerp_angle(rig.rotation.y,atan2(movement.x,movement.z),minf(1.0,d*5.0))
 		var pace := 7.0 if walk else 2.2
@@ -265,8 +268,8 @@ func sync(delta: float) -> void:
 			(actor["right_arm"] as Node3D).rotation.z = 0.50+0.25*sin(t*4.3+float(idx))
 		else:
 			(actor["right_arm"] as Node3D).rotation.z = 0.0
-		var base_y := target.y
-		rig.position.y = lerpf(rig.position.y,base_y,0.6)+0.016*sin(t*pace) if walk else lerpf(rig.position.y,base_y,0.5)
+		var appearance: Node3D = actor["visual"]
+		appearance.position.y = 0.018*sin(t*pace) if walk else 0.008*sin(t*pace)
 	if waiting_sign != null:
 		waiting_sign.text = "%d PERSONNES EN ATTENTE" % count_waiting
 	if safe_sign != null:
