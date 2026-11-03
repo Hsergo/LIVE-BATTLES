@@ -83,6 +83,15 @@ jobs:
             throw 'Tests physiques du combat echoues'
           }
 
+      - name: Verifier les 3 manches, les ames et l'absence de bots
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $console = Get-ChildItem tools/godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
+          if (-not $console) { throw 'Godot console absente' }
+          & $console.FullName --headless --path game --script res://tests/match_rules.gd
+          if ($LASTEXITCODE -ne 0) { throw 'Test regles jeu V0.4 echoue' }
+
       - name: Verifier le demarrage du jeu et les evenements locaux
         shell: pwsh
         run: |

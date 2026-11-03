@@ -31,3 +31,27 @@ La disponibilité des événements TikTok n'est pas garantie ; pas de mot de pas
 
 ## Étapes suivantes
 Compiler dans GitHub Actions, lire les logs, corriger Godot si nécessaire, télécharger l'installateur de CI, réaliser test Windows réel, tester OBS et TikTok en conditions autorisées, améliorer graphismes et animations.
+
+## V0.4 — Ame, equipes authentiques et matchs de trois manches
+
+Les personnages actifs sont uniquement ceux des spectateurs effectivement inscrits. Les places vacantes restent invisibles ; aucun pseudonyme BOT n'est utilise. Sans un joueur reel de chaque equipe, le timer ne commence pas. Les commandes gratuites restent possibles.
+
+Regles : 3 manches de 60 secondes maximum ; resultat affiche apres la troisieme (victoire Rouge, Bleu ou egalite), 11 secondes de ceremonie, puis nouveau match en manche 1. Les inscriptions persistent, mais les victoires et classements du match precedent sont remis a zero.
+
+Cadeaux et AMES DE JEU (configuration dans bridge/config/gifts.json) :
+- Rose : 1 ame
+- GG : 1 ame
+- Finger Heart : 6 ames
+- Doughnut : 35 ames
+- Galaxy : 150 ames
+
+Ces quantites ne sont **pas** les prix TikTok. Les noms de cadeaux et disponibilites peuvent varier selon la region. Les cadeaux inconnus n'octroient pas d'ames. Les cadeux non associes a une equipe sont mis en attente, pas attribues aleatoirement.
+
+Pouvoirs automatiques, depenses de la jauge equipe :
+- 10 ames : FLAMME, coups d'epee plus rapides pendant 6 s.
+- 35 ames : BOUCLIER, parade et soin de groupe.
+- 120 ames : TEMPETE, charge amelioree 12 s.
+
+Les dons ne permettent ni pari, ni gain financier, ni prix en argent. La verification des regles de la plateforme et des droits du connecteur reste indispensable avant la monetisation publique.
+
+Tests V0.4 : `game/tests/match_rules.gd` et `game/tests/combat_physics.gd`.

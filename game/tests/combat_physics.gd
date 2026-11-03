@@ -29,7 +29,12 @@ func _run() -> void:
 		quit(1)
 		return
 	var teams: Dictionary = director.get("units")
-	_assert_check(teams["red"].size() == 6 and teams["blue"].size() == 6, "Six unites physiques par equipe")
+	_assert_check(teams["red"].size() == 6 and teams["blue"].size() == 6, "Six emplacements physiques par equipe")
+	_assert_check(not bool(teams["red"][0].get("deployed")) and not bool(teams["blue"][0].get("deployed")), "Aucun joueur invente avant inscription")
+	game.call("_join", "RedTester", "red")
+	game.call("_join", "BlueTester", "blue")
+	_assert_check(bool(teams["red"][0].get("deployed")) and bool(teams["blue"][0].get("deployed")), "Deux joueurs reels actifs")
+	_assert_check(not bool(teams["red"][1].get("deployed")), "Aucun BOT actif dans les emplacements vides")
 	await create_timer(6.0).timeout
 	var real_hits := int(director.get("hit_count"))
 	_assert_check(real_hits > 0, "Des attaques automatiques ont touche une hitbox")
@@ -48,11 +53,15 @@ func _run() -> void:
 	isolated.add_child(defender)
 	attacker.call("initialize", "red", 0, visual_red, Vector3(-0.8, 0, -10), Vector3(5, 0, -10))
 	defender.call("initialize", "blue", 0, visual_blue, Vector3(0.8, 0, -10), Vector3(-5, 0, -10))
+	attacker.call("deploy_user", "IsolatedRed")
+	defender.call("deploy_user", "IsolatedBlue")
 	attacker.rotation.y = PI / 2.0
 	defender.rotation.y = -PI / 2.0
 	defender.call("raise_guard", 2.0)
-	attacker.set("battle_paused", true)
-	defender.set("battle_paused", true)
+	attacker.set_physics_process(false)
+	defender.set_physics_process(false)
+	attacker.set("battle_paused", false)
+	defender.set("battle_paused", false)
 	var counters := {"blocked": 0, "landed": 0}
 	attacker.connect("hit_parried", func(_a: Node3D, _v: Node3D): counters["blocked"] += 1)
 	attacker.connect("hit_landed", func(_a: Node3D, _v: Node3D, _d: float): counters["landed"] += 1)
