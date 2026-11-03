@@ -332,8 +332,10 @@ func tick(delta: float) -> void:
 	flood_level = clampf(elapsed/maxf(1.0,total_duration),0.0,1.0)
 	var stage_limits := [0.15, 0.32, 0.48] if demo_mode else DISASTER_STAGES
 	hazard_pressure = clampf(hazard_pressure + d * 0.0005 * float(SCENARIOS[scenario_index]["hazard"]),0.0,1.0)
+	flood_level = clampf(flood_level + hazard_pressure * 0.06,0.0,1.0)
 	if next_disaster < stage_limits.size() and elapsed/duration >= stage_limits[next_disaster]:
 		var damage := (18.0+float(next_disaster)*9.0) * float(SCENARIOS[scenario_index]["hazard"])
+		damage *= (1.0 + hazard_pressure * 0.55)
 		match str(SCENARIOS[scenario_index]["hazard_kind"]):
 			"seisme","glissement":
 				progress = maxf(0.0,progress-5.0-float(next_disaster))
