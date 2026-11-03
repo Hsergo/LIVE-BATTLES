@@ -56,11 +56,6 @@ func _run() -> void:
 	model.call("configure",true)
 	assert_that(str(model.get("status")) == "RUNNING", "Mode DEMO clairement distinct et auto-actif")
 	assert_that(model.get("participants").size() == 0, "Aucun faux spectateur genere en demonstration")
-	model.call("configure",false)
-	for i in range(65):
-		model.call("join","spectateur_%d" % i)
-	assert_that(model.get("participants").size() == 65,"65 vrais participants pris en compte sans limite de trois ouvriers")
-	assert_that(model.call("top_builders",3).is_empty(),"Aucun faux constructeur dans le classement")
 	for i in range(1250):
 		if str(model.get("status")) == "RESULT":
 			break
@@ -70,6 +65,11 @@ func _run() -> void:
 	print("DEMO DIAGNOSTIC: status=%s saved=%d/%d progress=%.2f strength=%.2f remaining=%.2f" % [str(model.get("status")), int(model.get("saved")),int(model.get("target")),float(model.get("progress")),float(model.get("strength")),float(model.get("seconds"))])
 	assert_that(str(model.get("status")) == "RESULT", "Demo atteint un resultat sans intervention")
 	assert_that(model.get("participants").size() == 0, "Aucun spectateur invente pendant le cycle automatique")
+	model.call("configure",false)
+	for i in range(65):
+		model.call("join","spectateur_%d" % i)
+	assert_that(model.get("participants").size() == 65,"65 vrais participants pris en compte sans limite de trois ouvriers")
+	assert_that(model.call("top_builders",3).is_empty(),"Aucun faux constructeur dans le classement")
 	print("MISSION RULES TESTS: ", "SUCCESS" if fail_count == 0 else "FAILED " + str(fail_count))
 	quit(0 if fail_count == 0 else 1)
 
