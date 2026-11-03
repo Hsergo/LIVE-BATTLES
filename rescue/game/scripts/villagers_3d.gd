@@ -36,7 +36,8 @@ func setup(game: RefCounted, scene_type: String) -> void:
 	var amount := mini(int(game.get("target")),MAX_CIVILIANS)
 	for idx in range(amount):
 		crowd.append(_create_civilian(idx))
-	waiting_sign = _sign("VILLAGEOIS EN ATTENTE",Vector3(-13.3,4.5,-1.9),Color("#ffecd0"))
+	var waiting_title := "EQUIPAGES EN ATTENTE" if scene_type == "lighthouse" else ("PERSONNES A EVACUER" if scene_type == "helipad" else "VILLAGEOIS EN ATTENTE")
+	waiting_sign = _sign(waiting_title,Vector3(-13.3,4.5,-1.9),Color("#ffecd0"))
 	safe_sign = _sign("ZONE DE REFUGE",Vector3(13.3,4.5,-1.9),Color("#a8ffe0"))
 	sync(0.0)
 
@@ -251,7 +252,7 @@ func sync(delta: float) -> void:
 		var base_y := target.y
 		rig.position.y = lerpf(rig.position.y,base_y,0.6)+0.016*sin(t*pace) if walk else lerpf(rig.position.y,base_y,0.5)
 	if waiting_sign != null:
-		waiting_sign.text = "%d VILLAGEOIS EN ATTENTE" % count_waiting
+		waiting_sign.text = "%d PERSONNES EN ATTENTE" % count_waiting
 	if safe_sign != null:
 		safe_sign.text = "%d MIS EN SECURITE" % int(mission.get("saved"))
 

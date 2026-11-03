@@ -21,3 +21,15 @@ Guide utilisateur : [Lancer le jeu, connecter TikTok et diffuser](docs/GUIDE_DEM
 **Important :** les tests automatisés et compilations Windows ne valident ni un vrai TikTok LIVE ni le rendu OBS sur le PC final. La bibliothèque TikTok est non officielle et sa licence doit être respectée.
 
 **Commandes camera :** F7 activer/desactiver rotation 360 ; F6 basculer entre la scene 3D et l'ancienne vue 2D ; F9 son ; F10 panneau organisateur ; F11 plein ecran.
+
+## Production personnages (en cours — aucune compilation automatique)
+
+Le dépôt est passé en **phase de direction artistique et de production des PNJ**. Le workflow Windows n'est plus exécuté sur chaque commit ; une compilation n'aura lieu que sur déclenchement manuel après validation du code et des assets.
+
+- `game/scripts/villagers_3d.gd` : adultes, enfants, aînés, vêtements, cheveux, bagages, animation de marche/attente et arrivée en zone sûre.
+- `game/scripts/world_3d.gd` : ouvriers dotés de casques, outils, gilets et badges nominatifs ; caméra 360° et plan de sauvetage rapproché.
+- `game/scripts/mission.gd` : association stable `person_index` ↔ villageois, tous les participants réels restent comptabilisés.
+- `game/tests/character_visual_rules.gd` : test de recette **préparé, non encore exécuté**.
+- `docs/DIRECTION_ARTISTIQUE_PERSONNAGES.md` : règles de qualité, origine des futurs modèles riggés et critères de sortie.
+
+Les nouveaux personnages restent **stylisés/procéduraux**. Un personnage professionnel texturé et riggé n'est pas encore importé, et aucun test de rendu final Windows n'a été effectué pour cette phase.
