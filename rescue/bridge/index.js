@@ -90,7 +90,9 @@ const server=http.createServer((req,res) => {
   respond(404,{ok:false});
 });
 wss=new WebSocketServer({server,maxPayload:8192});
-wss.on('connection', socket=>{
+wss.on('connection', (socket, request)=>{
+  // The Windows game has no browser Origin header. Reject cross-site browser control.
+  if (request.headers.origin) { socket.close(1008,'Browser origin forbidden'); return; }
   socket.send(JSON.stringify({type:'status',message:state}));
   socket.send(JSON.stringify({type:'providers',items:Object.keys(PROVIDERS)}));
   socket.on('message', raw=>{
