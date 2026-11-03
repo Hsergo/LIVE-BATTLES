@@ -103,6 +103,7 @@ jobs:
           Copy-Item (Get-Command node).Source dist-rescue/runtime/node.exe
           Copy-Item rescue/bridge/index.js dist-rescue/bridge/index.js
           Copy-Item rescue/bridge/rules.js dist-rescue/bridge/rules.js
+          Copy-Item rescue/bridge/providers.js dist-rescue/bridge/providers.js
           Copy-Item rescue/bridge/gifts.json dist-rescue/bridge/gifts.json
           Copy-Item rescue/bridge/node_modules dist-rescue/bridge/node_modules -Recurse
           Copy-Item rescue/launcher/start.ps1 dist-rescue/launcher/start.ps1

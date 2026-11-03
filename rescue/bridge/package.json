@@ -1,8 +1,8 @@
 {
   "name": "mission-sauvetage-live-bridge",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "Passerelle locale commandes TikTok LIVE et simulation de missions",
+  "description": "Passerelle multi-connecteurs TikFinity/TikTools",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
@@ -12,7 +12,6 @@
     "node": ">=22"
   },
   "dependencies": {
-    "ws": "8.18.3",
-    "tiktok-live-connector": "2.5.0"
+    "ws": "8.18.3"
   }
 }
