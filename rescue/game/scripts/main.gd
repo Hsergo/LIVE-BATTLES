@@ -37,6 +37,11 @@ var helicopter_active := false
 var last_progress := 0.0
 var last_saved := 0
 var last_strength := 0.0
+var fx: Array[Dictionary] = []
+var shake := 0.0
+var music: Node
+var live_auto_hide := false
+var hint_flash := 0.0
 
 func _ready() -> void:
 	randomize()
@@ -46,6 +51,8 @@ func _ready() -> void:
 	last_strength = float(state.get("strength"))
 	for i in range(32):
 		twinkle.append(Vector2(randf_range(0, WIDTH),randf_range(255,515)))
+	music = load("res://scripts/audio_fx.gd").new()
+	add_child(music)
 	_build_controls()
 	_open_socket()
 	set_process(true)
@@ -64,6 +71,13 @@ func _process(delta: float) -> void:
 	bridge_wave += d
 	ui_clock += d
 	flash = maxf(0,flash-d*2.0)
+	shake = maxf(0.0, shake-d*1.8)
+	for item in fx.duplicate():
+		item["time"] = float(item["time"])-d
+		item["pos"] = item["pos"]+item["velocity"]*d
+		item["velocity"] = item["velocity"]*0.96
+		if float(item["time"]) <= 0.0:
+			fx.erase(item)
 	banner_life = maxf(0,banner_life-d)
 	if helicopter_active:
 		helicopter_time += d
@@ -86,6 +100,9 @@ func _process(delta: float) -> void:
 		if int(e.get("id",0)) != last_event:
 			last_event = int(e.get("id",0))
 			var kind := str(e.get("kind",""))
+			_visual_event(e)
+			if music != null:
+				music.call("play_effect", kind)
 			if kind in ["gift","power"]:
 				helicopter_active = true
 				helicopter_time = 0.0
@@ -121,6 +138,10 @@ func _handle_packet(raw: String) -> void:
 		return
 	if str(packet.get("type","")) == "status":
 		status_tiktok = str(packet.get("message","")).substr(0,90)
+		if game_mode == "LIVE" and status_tiktok.begins_with("TIKTOK LIVE CONNECTE") and not live_auto_hide:
+			admin_visible = false
+			live_auto_hide = true
+			_update_controls()
 		return
 	if str(packet.get("type","")) != "event":
 		return
@@ -141,11 +162,13 @@ func _handle_packet(raw: String) -> void:
 func _switch_mode() -> void:
 	if game_mode == "DEMO":
 		game_mode = "LIVE"
+		live_auto_hide = false
 		state.call("configure",false)
 		banner = "MODE LIVE : AUCUN JOUEUR FICTIF"
 		banner_life = 3.0
 	else:
 		game_mode = "DEMO"
+		admin_visible = true
 		state.call("configure",true)
 		banner = "MODE DEMONSTRATION • SCENARIO AUTOMATIQUE"
 		banner_life = 3.0
@@ -237,7 +260,7 @@ func _build_controls() -> void:
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	stack.add_child(status_label)
 	var hint := Label.new()
-	hint.text = "F11 : plein ecran     |     F10 : masquer / afficher les commandes"
+	hint.text = "F11 : plein ecran    |    F10 : masquer les commandes    |    F9 : son"
 	hint.add_theme_font_size_override("font_size",13)
 	hint.add_theme_color_override("font_color",Color("#8c9dac"))
 	stack.add_child(hint)
@@ -261,6 +284,9 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if event.keycode == KEY_F10:
 		admin_visible = not admin_visible
 		_update_controls()
+	elif event.keycode == KEY_F9:
+		if music != null:
+			music.call("toggle_sound")
 	elif event.keycode == KEY_F11:
 		var window := get_window()
 		window.mode = Window.MODE_WINDOWED if window.mode == Window.MODE_FULLSCREEN else Window.MODE_FULLSCREEN
@@ -282,22 +308,31 @@ func _round_progress(y: float, fraction: float, main_color: Color, label: String
 func _draw() -> void:
 	_draw_base()
 	_draw_header()
-	draw_set_transform(Vector2(sin(clock*0.38)*3.0,cos(clock*0.22)*2.0),0.0,Vector2.ONE)
+	_draw_emergency_card()
+	var zoom := 1.14 + sin(clock*0.18)*0.013
+	var camera_pan := Vector2(
+		-50.0 + sin(clock*0.34)*2.6 + randf_range(-shake,shake)*11.0,
+		-169.0 + sin(clock*0.23)*2.2 + randf_range(-shake,shake)*8.0
+	)
+	draw_set_transform(camera_pan,0.0,Vector2(zoom,zoom))
 	_draw_landscape()
 	_draw_village()
 	_draw_bridge()
+	_draw_bridge_detail()
 	_draw_people()
 	_draw_weather()
+	_draw_fx()
 	draw_set_transform(Vector2.ZERO,0.0,Vector2.ONE)
 	_draw_scene_legend()
 	_draw_footer()
 	if banner_life > 0:
-		_rect(70,870,580,64,Color("#062b37dd"))
-		_text(banner,Vector2(94,914),23,Color("#ffecad"),false,532)
+		_rect(50,861,620,71,Color("#0a213de8"))
+		_rect(50,861,8,71,Color("#ffc56c"))
+		_text(banner,Vector2(73,904),22,Color("#fff0bc"),false,565)
 	if str(state.get("status")) == "RESULT":
 		_draw_result()
 	if flash > 0:
-		_rect(0,250,720,720,Color(1.0,0.62,0.33,flash*0.20))
+		_rect(0,250,720,720,Color(1.0,0.50,0.28,flash*0.22))
 
 func _draw_base() -> void:
 	_rect(0,0,720,1280,Color("#07162a"))
@@ -451,27 +486,33 @@ func draw_ellipse_shadow(at: Vector2, width: float) -> void:
 	draw_circle(at+Vector2(0,21),width,Color(0.01,0.14,0.18,0.27))
 
 func _draw_people() -> void:
-	var rank: Array = []
-	# Le rendu des participants LIVE ne cree jamais de pseudo fictif.
+	var names: Array = []
 	if game_mode == "LIVE":
-		for user in state.get("participants").keys():
-			if rank.size() >= 6:
+		var members: Dictionary = state.get("participants")
+		for user in members.keys():
+			if names.size() >= 7:
 				break
-			rank.append(str(user))
-	elif game_mode == "DEMO":
-		rank = ["DEMO", "DEMO", "DEMO"]
-	for i in range(rank.size()):
-		var x := 130.0 + float(i%3)*29.0
-		var y := 757.0 + float(i/3)*33.0 + sin(clock*3.0+float(i))*4.0
-		var worker_color := Color("#f9ca77") if i%2 == 0 else Color("#82dbca")
-		_draw_person(Vector2(x,y),worker_color,0.95,true)
-		_text(str(rank[i]).substr(0,16),Vector2(x-32,y-36),14,Color("#eaf8f7"),true,64)
-	var waiting := maxi(0,int(state.get("target"))-int(state.get("saved"))-state.get("crossings").size())
-	for i in range(mini(7,waiting)):
-		var px := 67.0 + float(i%4)*23.0
-		var py := 735.0 + float(i/4)*36.0
-		_draw_person(Vector2(px,py),Color("#e1a3ad") if i%2==0 else Color("#b9dcc0"),0.75,false)
-	_text("OUVRIERS : " + str(state.get("participants").size()) if game_mode == "LIVE" else "CHANTIER AUTOMATIQUE • DEMO",Vector2(28,855),17,Color("#e2f2ed"))
+			names.append(str(user))
+	else:
+		names = ["DEMO"]
+	var progress: float = float(state.get("progress"))/100.0
+	var build_front := BRIDGE_LEFT+minf(progress,0.96)*(BRIDGE_RIGHT-BRIDGE_LEFT)
+	for i in range(names.size()):
+		var x := clampf(build_front-17.0-float(i%3)*27.0,BRIDGE_LEFT+10.0,BRIDGE_RIGHT-22.0)
+		var y := BRIDGE_Y-19.0+float(i/3)*4.0+sin(clock*3.2+float(i))*5.0
+		var color := Color("#ffdb87") if i%2==0 else Color("#7ef0cb")
+		_draw_person(Vector2(x,y),color,1.27,true)
+		var display_name := str(names[i]).substr(0,13)
+		_rect(x-39,y-65,79,22,Color("#092737eb"))
+		_text("@" + display_name if game_mode == "LIVE" else "DEMO",Vector2(x-36,y-48),13,Color("#ffffff"),true,73)
+	var crossings: Array = state.get("crossings")
+	var waiting := maxi(0,int(state.get("target"))-int(state.get("saved"))-crossings.size())
+	for j in range(mini(8,waiting)):
+		var px := 61.0 + float(j%4)*24.0
+		var py := 740.0 + float(j/4)*40.0
+		_draw_person(Vector2(px,py),Color("#ec9ead") if j%2==0 else Color("#bfefc9"),0.99,false)
+	var caption := "%d VRAIS CONSTRUCTEURS" % names.size() if game_mode=="LIVE" else "DEMONSTRATION AUTOMATIQUE"
+	_text(caption,Vector2(28,848),17,Color("#f7fff5"))
 
 func _draw_weather() -> void:
 	var stage := int(state.get("weather_stage"))
@@ -488,35 +529,32 @@ func _draw_weather() -> void:
 			draw_line(Vector2(502,372),Vector2(542,405),Color("#f7f9df"),5)
 
 func _draw_scene_legend() -> void:
-	_rect(20,241,680,54,Color("#082533d7"))
+	_rect(21,242,678,53,Color("#06263dde"))
 	if str(state.get("status")) == "WAITING":
-		_text("EN ATTENTE : ECRIS !join DANS LES COMMENTAIRES",Vector2(34,275),18,Color("#fff1aa"))
+		_text("ECRIS !join DANS LE CHAT POUR DEMARRER !",Vector2(33,274),19,Color("#ffec9f"))
 	elif str(state.get("status")) == "RESULT":
-		_text("MISSION TERMINEE • NOUVELLE CARTE EN APPROCHE",Vector2(34,275),19,Color("#fff1aa"))
+		_text("SAUVETAGE TERMINE • NOUVELLE CRUE EN APPROCHE",Vector2(33,274),18,Color("#ffec9f"))
 	else:
-		_text("!build = construire   !repair = reparer   !rescue = sauver",Vector2(34,275),18,Color("#e0f5f6"))
+		_text("!build CONSTRUIRE    !repair REPARER    !rescue SAUVER",Vector2(34,275),18,Color("#e0f5f6"))
 	var events: Array = state.get("events")
 	if events.size() > 0:
 		var latest: Dictionary = events[0]
-		if float(latest.get("life",0)) > 0:
-			_rect(19,912,681,43,Color("#082b40da"))
-			_text(str(latest.get("message","")),Vector2(32,942),18,Color("#ffdf9e"),false,656)
+		if float(latest.get("life",0)) > 0.0:
+			_rect(18,912,682,43,Color("#082b40ef"))
+			_text(str(latest.get("message","")).substr(0,65),Vector2(29,941),18,Color("#ffe5aa"),false,655)
 
 func _draw_footer() -> void:
-	_rect(0,961,720,100,Color("#091b2b"))
-	draw_line(Vector2(0,962),Vector2(720,962),Color("#427983"),3)
-	_text("LE MONDE COMPTE SUR VOUS !",Vector2(26,1002),27,Color("#fff0cd"))
-	var materials := int(state.get("wood"))
-	_text("BOIS : %d" % materials,Vector2(28,1041),19,Color("#b4e3cb"))
-	var rank: Array = state.get("ranking").call(3) if false else []
-	var players: Array = state.get("contribution").keys()
-	players.sort_custom(func(a,b):return int(state.get("contribution")[a]) > int(state.get("contribution")[b]))
-	for i in range(mini(2,players.size())):
-		rank.append("@" + str(players[i]).substr(0,9))
+	_rect(0,961,720,100,Color("#091b2c"))
+	draw_line(Vector2(0,962),Vector2(720,962),Color("#43cab9"),3)
+	var seconds := int(ceil(float(state.get("seconds"))))
+	var urgent := seconds <= 32 and str(state.get("status"))=="RUNNING"
+	_text("DERNIERES SECONDES ! AGIS !" if urgent else "SAUVEZ LE VILLAGE ENSEMBLE !",Vector2(26,1001),26,Color("#ffba93") if urgent else Color("#fff1c6"))
+	_text("MATERIAUX  %d" % int(state.get("wood")),Vector2(26,1040),19,Color("#b5f0d6"))
+	var rank: Array[String] = state.call("ranking",2)
 	if not rank.is_empty():
-		_text("TOP : " + " / ".join(rank),Vector2(210,1041),17,Color("#c9f5e7"))
+		_text("TOP  " + "   /   ".join(rank),Vector2(242,1040),17,Color("#cff7ec"),false,450)
 	else:
-		_text("ECRIS !join POUR PARTICIPER",Vector2(225,1041),17,Color("#c9f5e7"))
+		_text("!join  POUR APPARAITRE SUR LE CHANTIER",Vector2(230,1040),17,Color("#cff7ec"))
 
 func _draw_result() -> void:
 	_rect(42,342,636,463,Color("#06192af3"))
@@ -548,3 +586,89 @@ func _star(center: Vector2, radius: float, color: Color) -> void:
 		var rad := radius if i%2==0 else radius*0.44
 		points.append(center+Vector2(cos(angle),sin(angle))*rad)
 	_poly(points,color)
+
+func _visual_event(event: Dictionary) -> void:
+	var kind := str(event.get("kind",""))
+	var focus := Vector2(BRIDGE_LEFT+float(state.get("progress"))/100.0*(BRIDGE_RIGHT-BRIDGE_LEFT),BRIDGE_Y-8)
+	var tint := Color("#ffe08a")
+	var count := 0
+	match kind:
+		"build":
+			count = 14
+			tint = Color("#ffe0a3")
+		"repair":
+			count = 15
+			tint = Color("#85ffcd")
+		"gift", "power":
+			count = 30
+			tint = Color("#f5d581")
+		"success":
+			count = 34
+			tint = Color("#98ffda")
+		"danger":
+			count = 35
+			tint = Color("#fc7676")
+			shake = 0.5
+		"join":
+			count = 14
+			tint = Color("#c6eaff")
+		_:
+			return
+	if kind == "success":
+		focus = Vector2(560,BRIDGE_Y-23)
+	if kind == "danger":
+		focus = Vector2(385,BRIDGE_Y+20)
+	for i in range(count):
+		if fx.size() >= 135:
+			fx.pop_front()
+		fx.append({
+			"pos":focus+Vector2(randf_range(-28,28),randf_range(-22,25)),
+			"velocity":Vector2(randf_range(-100,100),randf_range(-160,-50)),
+			"time":randf_range(0.40,0.90),
+			"size":randf_range(2.5,6.5),
+			"color":tint
+		})
+
+func _draw_fx() -> void:
+	for item in fx:
+		var alpha := clampf(float(item["time"])*1.6,0.0,1.0)
+		var color: Color = item["color"]
+		color.a = alpha
+		draw_circle(item["pos"],float(item["size"]),color)
+		draw_line(item["pos"],item["pos"]+Vector2(0,8),Color(color.r,color.g,color.b,alpha*0.27),1.5)
+
+func _draw_emergency_card() -> void:
+	var seconds := int(ceil(float(state.get("seconds"))))
+	var level := float(state.get("flood_level"))
+	var warning := seconds <= 35 and str(state.get("status"))=="RUNNING"
+	var card := Color("#491f2bdc") if warning else Color("#153a4add")
+	_rect(24,310,672,83,card)
+	_rect(24,310,7,83,Color("#ff8264") if warning else Color("#51d9c3"))
+	_text("URGENCE : L'EAU MONTE !" if warning else "LA CRUE APPROCHE • BESOIN DE VOUS",Vector2(42,347),24,Color("#ffe1a0"))
+	_text("NIVEAU DE CRUE",Vector2(43,376),16,Color("#afdddf"))
+	_rect(218,362,445,15,Color("#264453"))
+	_rect(218,362,445*level,15,Color("#fa7e68") if warning else Color("#62c5cf"))
+	if str(state.get("status"))=="RUNNING" and int(state.get("weather_stage"))>0:
+		_text("TEMPETE %d/3" % int(state.get("weather_stage")),Vector2(505,347),17,Color("#ffb9ad"))
+
+func _draw_bridge_detail() -> void:
+	var completion := float(state.get("progress"))/100.0
+	var passed := BRIDGE_LEFT+(BRIDGE_RIGHT-BRIDGE_LEFT)*completion
+	# Eclairage chaleureux du pont et cordages en perspective.
+	draw_line(Vector2(BRIDGE_LEFT-18,BRIDGE_Y-48),Vector2(BRIDGE_RIGHT+18,BRIDGE_Y-47),Color("#cfded7"),3.1)
+	for i in range(10):
+		var x := BRIDGE_LEFT+float(i)*((BRIDGE_RIGHT-BRIDGE_LEFT)/9.0)
+		var built := x <= passed
+		var rail_color := Color("#ffcf81") if built else Color("#708c9d")
+		draw_line(Vector2(x,BRIDGE_Y-47),Vector2(x,BRIDGE_Y+6),rail_color,3.0 if built else 1.5)
+		if built:
+			draw_circle(Vector2(x,BRIDGE_Y-45),3.4,Color("#ffe8ab"))
+	# Eclaboussures sous les supports.
+	for i in range(8):
+		var x := BRIDGE_LEFT+float(i)*50.0
+		var ripple := 11.0+sin(clock*2.4+float(i))*5.0
+		draw_arc(Vector2(x,BRIDGE_Y+106),ripple,0.0,PI,13,Color(0.70,0.98,1.0,0.19),1.8)
+	# Une vague gagne du terrain a mesure que le chrono avance.
+	var flood := float(state.get("flood_level"))
+	var swell := 12.0+flood*48.0+sin(clock*2.7)*5.0
+	draw_arc(Vector2(410,BRIDGE_Y+174-flood*52.0),swell,PI,TAU,25,Color(0.76,0.98,1.0,0.20+flood*0.32),5.0)
