@@ -29,7 +29,7 @@ func _run() -> void:
 	assert_that(int(model.get("gifted_resources")) == 8, "Rose x2 apporte 8 materiaux")
 	assert_that(model.call("gift","alice","Galaxy",1), "Galaxy declenche livraison majeure")
 	assert_that(float(model.get("protection_seconds")) > 0.0, "La digue anti-tempete est active")
-	model.set("progress",90.0)
+	model.set("progress",100.0)
 	model.set("strength",90.0)
 	assert_that(model.call("receive","alice","!rescue"), "Evacuation possible si pont assez construit")
 	assert_that(int(model.get("rescue_queue")) > 0, "Habitant ajoute a la file d'evacuation")

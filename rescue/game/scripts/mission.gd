@@ -171,8 +171,8 @@ func repair(user: String) -> bool:
 func rescue(user: String) -> bool:
 	if not _eligible(user,"rescue",RESCUE_COOLDOWN):
 		return false
-	if progress < 78.0:
-		_note("PONT INACHEVE • CONSTRUISSEZ D'ABORD !", "warning")
+	if progress < 99.9:
+		_note("PONT INACHEVE • FINISSEZ LES PLANCHES !", "warning")
 		return false
 	if strength < 20.0:
 		_note("PONT FRAGILE • IL FAUT REPARER !", "warning")
@@ -267,7 +267,7 @@ func tick(delta: float) -> void:
 		_note("VAGUE %d/3 • PONT ENDOMMAGE ! REPARER !" % (next_disaster), "danger")
 	if demo_mode:
 		_tick_demo()
-	if rescue_queue > 0 and crossings.size() < 4 and progress >= 78.0 and strength >= 20.0:
+	if rescue_queue > 0 and crossings.size() < 4 and progress >= 99.9 and strength >= 20.0:
 		rescue_queue -= 1
 		crossings.append({"p":0.0,"speed":0.245+randf_range(-0.025,0.025),"lane":randi_range(0,2)})
 	for crossing in crossings.duplicate():
@@ -283,24 +283,22 @@ func tick(delta: float) -> void:
 		_finish(false)
 
 func _tick_demo() -> void:
-	var auto_interval := 1.25 if progress < 83.0 else 3.1
-	if demo_clock >= auto_interval:
-		demo_clock = 0.0
-		var stage := action_sequence % 7
-		if progress < 84.0:
-			stage = 0
-		elif strength < 48.0:
-			stage = 1
-		elif saved + rescue_queue + crossings.size() < target:
-			stage = 2
-		match stage:
-			0, 3, 5:
-				build("DEMO")
-			1, 4:
-				repair("DEMO")
-			2, 6:
-				rescue("DEMO")
-		# Une demonstration est clairement marquee et ne simule pas de vrais spectateurs.
+	var interval := 1.15 if progress < 99.9 else 2.8
+	if strength < 46.0:
+		interval = 1.15
+	if demo_clock < interval:
+		return
+	demo_clock = 0.0
+	if progress < 99.9:
+		build("DEMO")
+	elif strength < 46.0:
+		repair("DEMO")
+	elif saved + rescue_queue + crossings.size() < target:
+		rescue("DEMO")
+	else:
+		# Attente constructive des derniers traversants.
+		if strength < 84.0:
+			repair("DEMO")
 
 func _finish(success: bool) -> void:
 	if status == "RESULT":
