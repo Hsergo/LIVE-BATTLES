@@ -74,11 +74,11 @@ func tick(delta: float, game: RefCounted, is_live: bool) -> String:
 	var target := int(game.get("target"))
 	if strength < 36.0:
 		return "AGENT SECURITE : SOLIDITE CRITIQUE ! TAPE !repair."
+	if is_live and clock >= gift_nudge_at and game.get("participants").size() > 0:
+		gift_nudge_at = clock + 90.0
+		return "CADEAU FACULTATIF : ROSE = MATERIAUX. !build EST GRATUIT."
 	if progress < 99.9:
 		return "AGENT CHANTIER : BESOIN D'OUVRIERS ! TAPE !build."
 	if saved < target:
 		return "AGENT SAUVETAGE : %d PERSONNES A SECOURIR ! TAPE !rescue." % (target-saved)
-	if is_live and clock > gift_nudge_at:
-		gift_nudge_at = clock + 90.0
-		return "OPTIONNEL : UNE ROSE LIVRE DES MATERIAUX. !build RESTE GRATUIT."
 	return "AGENT MISSION : GARDEZ LE SITE SOLIDE JUSQU'A LA FIN."
