@@ -42,6 +42,9 @@ var hit_ids: Dictionary = {}
 var elapsed := 0.0
 var stagger_push := Vector3.ZERO
 var battle_paused := false
+var deployed := false
+var owner_id := ""
+
 
 func _box(parent: Node3D, dimensions: Vector3, at: Vector3, color: Color, bright: bool = false) -> MeshInstance3D:
 	var mesh := BoxMesh.new()
@@ -134,6 +137,8 @@ func initialize(side: String, slot: int, art: Node3D, start: Vector3, enemy_base
 	attack_cooldown = randf_range(0.2, 0.9)
 
 func _physics_process(delta: float) -> void:
+	if not deployed:
+		return
 	elapsed += delta
 	if battle_paused:
 		velocity = Vector3.ZERO
@@ -165,7 +170,7 @@ func _physics_process(delta: float) -> void:
 	var stop_distance := REACH * 0.82 if enemy_present else 1.10
 	var desired := Vector3.ZERO
 	if slow_time <= 0 and distance > stop_distance:
-		desired = towards.normalized() * (2.15 if champion else 2.45)
+		desired = towards.normalized() * (2.85 if champion else 3.2) * (1.32 if boost_time > 0 else 1.0)
 		desired.z += clampf((lane_z - global_position.z) * 0.65, -0.7, 0.7)
 	if slow_time > 0:
 		desired = Vector3.ZERO
@@ -188,7 +193,7 @@ func _physics_process(delta: float) -> void:
 	else:
 		sword_pivot.rotation.y = sin(elapsed * 2.2 + index) * 0.14
 		if attack_cooldown <= 0 and slow_time <= 0 and distance <= REACH + (0.32 if enemy_present else 0.2):
-			if enemy_present and randf() < 0.13:
+			if enemy_present and randf() < 0.09:
 				raise_guard(0.35)
 			else:
 				start_attack()
@@ -203,7 +208,7 @@ func _update_cosmetic() -> void:
 		spark_mesh.visible = slow_time > 0.04 and slow_time < 0.28
 
 func start_attack() -> void:
-	if not active or attack_elapsed >= 0 or slow_time > 0 or battle_paused:
+	if not deployed or not active or attack_elapsed >= 0 or slow_time > 0 or battle_paused:
 		return
 	attack_elapsed = 0.0
 	hit_ids.clear()
@@ -211,7 +216,7 @@ func start_attack() -> void:
 	sword_pivot.rotation.y = -1.13
 
 func raise_guard(seconds: float = 0.75) -> void:
-	if not active or battle_paused:
+	if not deployed or not active or battle_paused:
 		return
 	guard_time = maxf(guard_time, seconds)
 	sword_pivot.rotation.y = -0.45
@@ -242,6 +247,8 @@ func _fall() -> void:
 	fallen.emit(self, team)
 
 func _respawn() -> void:
+	if not deployed:
+		return
 	global_position = spawn_point
 	velocity = Vector3.ZERO
 	hp = max_hp
@@ -263,6 +270,8 @@ func empower(seconds: float) -> void:
 	boost_time = maxf(boost_time, seconds)
 
 func _detect_contacts() -> void:
+	if not deployed or not active or battle_paused:
+		return
 	for area in hit_area.get_overlapping_areas():
 		if area.has_meta("combat_fighter"):
 			var opponent: Node3D = area.get_meta("combat_fighter")
@@ -293,3 +302,26 @@ func _detect_contacts() -> void:
 				continue
 			hit_ids[crystal_id] = true
 			crystal_landed.emit(self, crystal_side, 4.0 if not champion else 7.0)
+
+func deploy_user(user_name: String) -> void:
+	var allowed := user_name != ""
+	if deployed == allowed and owner_id == user_name:
+		return
+	deployed = allowed
+	owner_id = user_name
+	visible = allowed
+	if allowed:
+		_respawn()
+		battle_paused = true
+	else:
+		active = false
+		velocity = Vector3.ZERO
+		target = null
+		attack_elapsed = -1.0
+		collision_layer = 0
+		collision_mask = 0
+		if hurt_area != null:
+			hurt_area.monitorable = false
+
+func get_player_name() -> String:
+	return owner_id

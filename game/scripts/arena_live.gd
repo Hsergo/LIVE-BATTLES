@@ -89,7 +89,7 @@ func _create_soldier(team: String, index: int) -> Node3D:
 	_box(soldier, Vector3(0.14, 0.50, 0.15), Vector3(-0.20, 0.2, 0), color.darkened(0.18))
 	_box(soldier, Vector3(0.14, 0.50, 0.15), Vector3(0.20, 0.2, 0), color.darkened(0.18))
 	_add_sword(soldier, team, 0.57)
-	var tag := _tag(soldier, "BOT " + str(index + 1), 1.86, GOLD)
+	var tag := _tag(soldier, "", 1.86, GOLD)
 	labels[team].append(tag)
 	var side := -1.0 if team == "red" else 1.0
 	var x := side * (1.45 + float(index % 3) * 1.35)
@@ -126,7 +126,7 @@ func setup(existing_champions: Array[Node3D]) -> void:
 		var team := "red" if i == 0 else "blue"
 		var champion := champions[i]
 		swords.append(_add_sword(champion, team))
-		champion_labels[team] = _tag(champion, "CAPITAINE IA", 3.25, GOLD)
+		champion_labels[team] = _tag(champion, "", 3.25, GOLD)
 		_box(champion, Vector3(0.80, 0.20, 0.78), Vector3(0, 2.9, 0), GOLD)
 	update_players({}, {})
 
@@ -157,25 +157,19 @@ func update_players(player_data: Dictionary, scores: Dictionary) -> void:
 	last_contributions = scores.duplicate()
 	for team in ["red", "blue"]:
 		var members: Array[String] = []
-		for key in player_data.keys():
-			if str(player_data[key]) == team:
-				members.append(str(key))
+		for user in player_data.keys():
+			if str(player_data[user]) == team:
+				members.append(str(user))
 		members.sort_custom(func(a: String, b: String) -> bool:
 			return int(scores.get(a, 0)) > int(scores.get(b, 0))
 		)
-		var lead: String = members[0] if members.size() > 0 else "CAPITAINE IA"
-		var ch_label: Label3D = champion_labels[team]
-		ch_label.text = "CHAMPION: " + lead.substr(0, 13) if members.size() > 0 else lead
-		var offset := carousel_offset % maxi(1, members.size())
-		var names: Array = labels[team]
-		for i in range(names.size()):
-			var label: Label3D = names[i]
-			if members.size() > 0 and i < mini(members.size(), MAX_VISIBLE_PER_TEAM):
-				label.text = members[(i + offset) % members.size()].substr(0, 13)
-				label.modulate = Color.WHITE
-			else:
-				label.text = "BOT " + str(i + 1)
-				label.modulate = GOLD
+		var leader: Label3D = champion_labels[team]
+		leader.text = "@" + members[0].substr(0, 16) if members.size() > 0 else ""
+		var nameplates: Array = labels[team]
+		for i in range(nameplates.size()):
+			var tag: Label3D = nameplates[i]
+			tag.text = "@" + members[i + 1].substr(0, 16) if i + 1 < members.size() else ""
+			tag.modulate = Color.WHITE
 
 func set_health(team: String, hp: float) -> void:
 	if not crystal_meshes.has(team):
@@ -215,3 +209,17 @@ func _popup(team: String, title: String, color: Color) -> void:
 	tween.tween_property(node, "position:y", 3.15, 0.65)
 	tween.parallel().tween_property(text_label, "transparency", 1.0, 0.65)
 	tween.tween_callback(node.queue_free)
+
+func gift_feedback(team: String, souls: int, user: String, gift_name: String) -> void:
+	var where := Vector3(-3.9, 0.25, -1.0) if team == "red" else Vector3(3.9, 0.25, -1.0)
+	var color := Color("#ffb6ca") if team == "red" else Color("#a5e6ff")
+	_popup(team, "@" + user.substr(0, 12) + " +" + str(souls) + " AMES", Color("#fff1a3"))
+	for i in range(mini(6, maxi(2, souls / 10 + 2))):
+		var orb := Node3D.new()
+		orb.position = where + Vector3(randf_range(-0.8, 0.8), randf_range(0.0, 0.4), randf_range(-0.6, 0.6))
+		add_child(orb)
+		_sphere(orb, 0.14, Vector3.ZERO, color, true)
+		var animation := create_tween()
+		animation.tween_property(orb, "position:y", orb.position.y + 2.4, 0.85)
+		animation.parallel().tween_property(orb, "scale", Vector3(0.1, 0.1, 0.1), 0.85)
+		animation.tween_callback(orb.queue_free)

@@ -60,7 +60,9 @@ func setup(arena_node: Node3D, champion_visuals: Array[Node3D]) -> void:
 			if slot == 0:
 				hero[side] = soldier
 		_make_crystal_sensor(side)
-	battle_notice.emit("ARMEE PRETE : 12 COMBATTANTS PHYSIQUES")
+	sync_players({}, {})
+	pause_round(true)
+	battle_notice.emit("ARENE PRETE : AUCUN FAUX JOUEUR")
 
 func _make_crystal_sensor(side: String) -> void:
 	var red: bool = side == "red"
@@ -106,7 +108,7 @@ func _physics_process(_delta: float) -> void:
 			u.set("target", nearest)
 
 func _text_fx(where: Vector3, label: String, color: Color) -> void:
-	if particles.size() > 48:
+	if particles.size() > 14:
 		return
 	var holder := Node3D.new()
 	holder.position = where + Vector3(0, 2.25, 0)
@@ -114,8 +116,8 @@ func _text_fx(where: Vector3, label: String, color: Color) -> void:
 	var font_label := Label3D.new()
 	font_label.text = label
 	font_label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-	font_label.font_size = 40
-	font_label.pixel_size = 0.008
+	font_label.font_size = 30
+	font_label.pixel_size = 0.006
 	font_label.modulate = color
 	font_label.outline_size = 11
 	font_label.no_depth_test = true
@@ -132,13 +134,15 @@ func _text_fx(where: Vector3, label: String, color: Color) -> void:
 
 func _hit_confirmed(attacker: Node3D, victim: Node3D, amount: float) -> void:
 	hit_count += 1
-	_text_fx(victim.global_position, "-%d PV" % int(ceil(amount)), Color("#ffd1a5"))
+	if hit_count % 4 == 0 or bool(attacker.get("champion")):
+		_text_fx(victim.global_position, "-%d" % int(ceil(amount)), Color("#ffd1a5"))
 	physics_telemetry.emit(hit_count, parry_count, ko_count)
 
 func _parry_confirmed(attacker: Node3D, defender: Node3D) -> void:
 	parry_count += 1
 	_text_fx(defender.global_position, "PARADE !", Color("#77ecff"))
-	battle_notice.emit("PARADE %s : coup bloque" % str(defender.get("team")).to_upper())
+	if parry_count % 5 == 0:
+		battle_notice.emit("PARADE %s : coup bloque" % str(defender.get("team")).to_upper())
 	physics_telemetry.emit(hit_count, parry_count, ko_count)
 
 func _crystal_confirmed(attacker: Node3D, target_side: String, amount: float) -> void:
@@ -189,13 +193,57 @@ func gift_power(side: String, points: int) -> void:
 func restart_round() -> void:
 	for side in ["red", "blue"]:
 		for u in units[side]:
-			u.set("respawn_time", 0.01)
-			u.call("_respawn")
-			u.set("battle_paused", false)
+			if bool(u.get("deployed")):
+				u.call("_respawn")
+				u.set("battle_paused", false)
 	physics_active = true
+
 
 func pause_round(paused: bool) -> void:
 	physics_active = not paused
 	for side in ["red", "blue"]:
 		for u in units[side]:
 			u.set("battle_paused", paused)
+
+func sync_players(player_data: Dictionary, scores: Dictionary) -> void:
+	for side in ["red", "blue"]:
+		var roster: Array[String] = []
+		for user in player_data.keys():
+			if str(player_data[user]) == side:
+				roster.append(str(user))
+		roster.sort_custom(func(a: String, b: String) -> bool:
+			return int(scores.get(a, 0)) > int(scores.get(b, 0))
+		)
+		for index in range(units[side].size()):
+			var name: String = roster[index] if index < roster.size() else ""
+			units[side][index].call("deploy_user", name)
+
+func soul_power(side: String, tier: int, user: String) -> void:
+	var abilities: Array = units[side]
+	if tier == 3:
+		for u in abilities:
+			if bool(u.get("deployed")) and bool(u.get("active")):
+				u.call("empower", 12.0)
+				u.call("heal", 12.0)
+				u.call("raise_guard", 0.8)
+		battle_notice.emit("TEMPETE DES AMES ! " + user)
+	elif tier == 2:
+		for u in abilities:
+			if bool(u.get("deployed")) and bool(u.get("active")):
+				u.call("raise_guard", 2.0)
+				u.call("heal", 18.0)
+		battle_notice.emit("BOUCLIER DES AMES ! " + user)
+	else:
+		for u in abilities:
+			if bool(u.get("deployed")) and bool(u.get("active")):
+				u.call("empower", 6.0)
+		battle_notice.emit("FLAMME DES AMES ! " + user)
+	var lead: Node3D = hero[side]
+	if bool(lead.get("deployed")):
+		_text_fx(lead.global_position, "AME x%d !" % tier, Color("#fff3ac"))
+
+func reset_match_stats() -> void:
+	hit_count = 0
+	parry_count = 0
+	ko_count = 0
+	physics_telemetry.emit(hit_count, parry_count, ko_count)
