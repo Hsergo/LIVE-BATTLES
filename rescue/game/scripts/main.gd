@@ -41,6 +41,7 @@ var fx: Array[Dictionary] = []
 var shake := 0.0
 var music: Node
 var live_auto_hide := false
+var saved_live_name := ""
 var hint_flash := 0.0
 
 func _ready() -> void:
@@ -54,6 +55,7 @@ func _ready() -> void:
 	music = load("res://scripts/audio_fx.gd").new()
 	add_child(music)
 	_build_controls()
+	_load_preferences()
 	_open_socket()
 	set_process(true)
 	queue_redraw()
@@ -121,12 +123,18 @@ func _poll_socket(d: float) -> void:
 	ws.poll()
 	var status := ws.get_ready_state()
 	if status == WebSocketPeer.STATE_OPEN:
+		if not connected_before:
+			connected_before = true
+			if game_mode == "LIVE" and not saved_live_name.is_empty():
+				ws.send_text(JSON.stringify({"type":"control","action":"connect","username":saved_live_name}))
+				status_tiktok = "RECONNEXION AUTOMATIQUE : @" + saved_live_name
 		bridge_connected = true
 		reconnect = 4.0
 		while ws.get_available_packet_count() > 0:
 			_handle_packet(ws.get_packet().get_string_from_utf8())
 	elif status == WebSocketPeer.STATE_CLOSED:
 		bridge_connected = false
+		connected_before = false
 		reconnect -= d
 		if reconnect <= 0.0:
 			reconnect = 4.0
@@ -170,6 +178,10 @@ func _switch_mode() -> void:
 		game_mode = "DEMO"
 		admin_visible = true
 		state.call("configure",true)
+		saved_live_name = ""
+		if ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
+			ws.send_text(JSON.stringify({"type":"control","action":"disconnect"}))
+		_save_preferences(false)
 		banner = "MODE DEMONSTRATION • SCENARIO AUTOMATIQUE"
 		banner_life = 3.0
 	_update_controls()
@@ -184,6 +196,8 @@ func _connect_tiktok() -> void:
 	if ws.get_ready_state() != WebSocketPeer.STATE_OPEN:
 		status_tiktok = "PASSERELLE LOCALE NON DISPONIBLE"
 		return
+	saved_live_name = name
+	_save_preferences(true)
 	ws.send_text(JSON.stringify({"type":"control","action":"connect","username":name}))
 	status_tiktok = "CONNEXION DEMANDEE : @" + name
 
@@ -677,3 +691,25 @@ func _draw_bridge_detail() -> void:
 	var flood := float(state.get("flood_level"))
 	var swell := 12.0+flood*48.0+sin(clock*2.7)*5.0
 	draw_arc(Vector2(410,BRIDGE_Y+174-flood*52.0),swell,PI,TAU,25,Color(0.76,0.98,1.0,0.20+flood*0.32),5.0)
+
+func _load_preferences() -> void:
+	# Uniquement un pseudonyme public ; aucun mot de passe, cookie ou jeton.
+	var config := ConfigFile.new()
+	if config.load("user://mission_settings.cfg") != OK:
+		return
+	var name := str(config.get_value("startup","tiktok_username","")).strip_edges().trim_prefix("@")
+	if name.is_empty():
+		return
+	live_name.text = name
+	if bool(config.get_value("startup","auto_live",false)):
+		saved_live_name = name
+		if game_mode != "LIVE":
+			_switch_mode()
+		banner = "RECONNEXION AU LIVE : @" + name
+		banner_life = 3.0
+
+func _save_preferences(auto_live: bool) -> void:
+	var config := ConfigFile.new()
+	config.set_value("startup","tiktok_username",live_name.text.strip_edges().trim_prefix("@"))
+	config.set_value("startup","auto_live",auto_live)
+	config.save("user://mission_settings.cfg")
