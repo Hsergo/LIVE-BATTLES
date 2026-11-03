@@ -29,6 +29,10 @@ var log_ui: Label
 var leaders_ui: Label
 var live_username: LineEdit
 var arena_live: Node3D
+var combat_director: Node3D
+var confirmed_hits := 0
+var confirmed_parries := 0
+var confirmed_knockouts := 0
 var wins_red := 0
 var wins_blue := 0
 var match_finished := false
@@ -41,6 +45,12 @@ func _ready() -> void:
 	arena_live = load("res://scripts/arena_live.gd").new()
 	add_child(arena_live)
 	arena_live.call("setup", fighters)
+	combat_director = load("res://scripts/combat_director.gd").new()
+	add_child(combat_director)
+	combat_director.connect("damage_crystal", _on_crystal_damage)
+	combat_director.connect("battle_notice", _log)
+	combat_director.connect("physics_telemetry", _on_physics_telemetry)
+	combat_director.call("setup", arena_live, fighters)
 	_build_hud()
 	_connect_bridge()
 	_log("Bienvenue dans LIVE BATTLES !")
@@ -90,9 +100,9 @@ func _fighter(pos: Vector3, color: Color) -> Node3D:
 func _build_scene() -> void:
 	var camera := Camera3D.new()
 	add_child(camera)
-	camera.position = Vector3(0, 8, 14)
-	camera.look_at(Vector3(0, 1, 0))
-	camera.fov = 54.0
+	camera.position = Vector3(0, 7.2, 12.5)
+	camera.look_at(Vector3(0, 1.25, 0))
+	camera.fov = 57.0
 	camera.current = true
 	var sunlight := DirectionalLight3D.new()
 	add_child(sunlight)
@@ -237,16 +247,8 @@ func _process(delta: float) -> void:
 			_next_round()
 	else:
 		round_time -= delta
-		combat_tick += delta
-		if combat_tick >= 1.5:
-			combat_tick = 0
-			_damage("blue", 2.5 + float(_members("red")) * 0.25)
-			_damage("red", 2.5 + float(_members("blue")) * 0.25)
 		if round_time <= 0 or red_hp <= 0 or blue_hp <= 0:
 			_end_round()
-	var jump := sin(float(Time.get_ticks_msec()) / 300.0) * 0.11
-	fighters[0].position.y = jump
-	fighters[1].position.y = -jump
 	_update_hud()
 
 func _members(team: String) -> int:
@@ -257,25 +259,26 @@ func _members(team: String) -> int:
 	return number
 
 func _damage(team: String, damage: float) -> void:
+	# Cette fonction ne recoit QUE des evenements de collision ou de K.O.
 	var dealt := 0.0
 	if team == "red":
-		var shielded := minf(red_shield, damage)
-		red_shield -= shielded
-		dealt = minf(red_hp, damage - shielded)
-		red_hp = maxf(0, red_hp - dealt)
+		var absorbed := minf(red_shield, damage)
+		red_shield -= absorbed
+		dealt = minf(red_hp, damage - absorbed)
+		red_hp = maxf(0.0, red_hp - dealt)
 	elif team == "blue":
-		var shielded := minf(blue_shield, damage)
-		blue_shield -= shielded
-		dealt = minf(blue_hp, damage - shielded)
-		blue_hp = maxf(0, blue_hp - dealt)
+		var absorbed := minf(blue_shield, damage)
+		blue_shield -= absorbed
+		dealt = minf(blue_hp, damage - absorbed)
+		blue_hp = maxf(0.0, blue_hp - dealt)
 	if arena_live != null:
 		arena_live.call("set_health", team, red_hp if team == "red" else blue_hp)
-		if dealt > 0:
-			arena_live.call("strike", "blue" if team == "red" else "red", dealt, "EPEE")
+
 func _end_round() -> void:
 	if intermission > 0:
 		return
 	intermission = 4.0
+	combat_director.call("pause_round", true)
 	if red_hp > blue_hp:
 		wins_red += 1
 		score_red += 10
@@ -310,7 +313,8 @@ func _next_round() -> void:
 	round_number += 1
 	arena_live.call("set_health", "red", 100.0)
 	arena_live.call("set_health", "blue", 100.0)
-	_log("Nouvelle manche : COMBAT !")
+	combat_director.call("restart_round")
+	_log("Nouvelle manche : COMBAT PHYSIQUE !")
 func _join(user: String, team: String) -> void:
 	if team != "red" and team != "blue":
 		return
@@ -334,35 +338,35 @@ func _add_points(user: String, team: String, amount: int) -> void:
 func _action(user: String, command: String) -> void:
 	var team: String = str(players.get(user, ""))
 	if team == "":
-		_log(user + " doit rejoindre une equipe")
+		_log(user + " doit d'abord rejoindre une equipe")
 		return
 	var key := user + ":" + command
 	var now := Time.get_ticks_msec()
 	if now - int(cooldown.get(key, -10000)) < 1500:
 		return
 	cooldown[key] = now
-	var opponent := "blue" if team == "red" else "red"
 	match command:
 		"!attack":
-			_damage(opponent, 7)
+			combat_director.call("command", team, "attack")
 			_add_points(user, team, 2)
-			_log(user + " attaque !")
+			_log(user + " ordonne une CHARGE !")
 		"!defend":
+			combat_director.call("command", team, "defend")
 			if team == "red":
-				red_shield = minf(40.0, red_shield + 8)
+				red_shield = minf(30.0, red_shield + 5.0)
 			else:
-				blue_shield = minf(40.0, blue_shield + 8)
+				blue_shield = minf(30.0, blue_shield + 5.0)
 			_add_points(user, team, 1)
-			arena_live.call("reaction", team, "defend")
-			_log(user + " defend !")
+			_log(user + " active les PARADES !")
 		"!heal":
+			combat_director.call("command", team, "heal")
 			if team == "red":
-				red_hp = minf(100, red_hp + 8)
+				red_hp = minf(100, red_hp + 3.0)
 			else:
-				blue_hp = minf(100, blue_hp + 8)
+				blue_hp = minf(100, blue_hp + 3.0)
+			arena_live.call("set_health", team, red_hp if team == "red" else blue_hp)
 			_add_points(user, team, 1)
-			arena_live.call("reaction", team, "heal")
-			_log(user + " soigne !")
+			_log(user + " soigne ses combattants !")
 
 func _gift(user: String, points: int, gift_name: String) -> void:
 	if not players.has(user):
@@ -370,9 +374,9 @@ func _gift(user: String, points: int, gift_name: String) -> void:
 	var team: String = str(players[user])
 	var safe_points := clampi(points, 1, 1000)
 	_add_points(user, team, safe_points)
-	_damage("blue" if team == "red" else "red", minf(20.0, float(safe_points) * 0.6))
-	arena_live.call("reaction", team, "gift")
-	_log(user + " : " + gift_name + " +" + str(safe_points))
+	# Le cadeau renforce l'armee; il ne retire pas magiquement des PV.
+	combat_director.call("gift_power", team, safe_points)
+	_log(user + " BOOSTE " + team.to_upper() + " : " + gift_name)
 
 func _chat(user: String, message: String) -> void:
 	var text := message.strip_edges().to_lower()
@@ -429,13 +433,24 @@ func _update_hud() -> void:
 	health_ui.text = "CRISTAUX  %d PV  |  %d PV" % [int(red_hp), int(blue_hp)]
 	round_ui.text = "MANCHE %d | %02d s | %d ROUGES / %d BLEUS" % [round_number, int(maxf(0, round_time)), _members("red"), _members("blue")]
 	status_ui.text = bridge_state if connected else "AUTONOME • BOTS ACTIFS"
-	recruitment_ui.text = "REJOINS : !join red  /  !join blue  |  ATTAQUE : !attack"
+	recruitment_ui.text = "!join red / !join blue • !attack • !defend • !heal"
 	var people: Array = contributions.keys()
 	people.sort_custom(func(a, b): return int(contributions[a]) > int(contributions[b]))
 	var leaders := PackedStringArray()
 	for i in range(mini(3, people.size())):
 		leaders.append(str(people[i]) + " " + str(contributions[people[i]]))
-	leaders_ui.text = "TOP : " + " | ".join(leaders) if not leaders.is_empty() else "BOTS EN ACTION — SOIS LE PREMIER A REJOINDRE !"
+	leaders_ui.text = "TOP : " + " | ".join(leaders) if not leaders.is_empty() else "12 BOTS COMBATTENT — REJOINS UNE EQUIPE !"
+	if confirmed_hits > 0:
+		status_ui.text += " | %d TOUCHES | %d PARADES" % [confirmed_hits, confirmed_parries]
 func _log(message: String) -> void:
 	if log_ui != null:
 		log_ui.text = message
+
+func _on_crystal_damage(team: String, amount: float) -> void:
+	if intermission <= 0:
+		_damage(team, amount)
+
+func _on_physics_telemetry(hits: int, parries: int, knockouts: int) -> void:
+	confirmed_hits = hits
+	confirmed_parries = parries
+	confirmed_knockouts = knockouts

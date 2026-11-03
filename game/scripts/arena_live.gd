@@ -14,6 +14,7 @@ var soldiers: Dictionary = {"red": [], "blue": []}
 var soldier_origins: Dictionary = {"red": [], "blue": []}
 var labels: Dictionary = {"red": [], "blue": []}
 var champion_labels: Dictionary = {}
+var external_combat_control := false
 var actor_time := 0.0
 var carousel_offset := 0
 var carousel_timer := 0.0
@@ -65,6 +66,7 @@ func _tag(parent: Node3D, title: String, height: float, color: Color) -> Label3D
 func _add_sword(parent: Node3D, team: String, scale_factor: float = 1.0) -> Node3D:
 	var side := 1.0 if team == "red" else -1.0
 	var hand := Node3D.new()
+	hand.name = "SwordVisual"
 	hand.position = Vector3(side * 0.72 * scale_factor, 1.3 * scale_factor, 0.12)
 	parent.add_child(hand)
 	_box(hand, Vector3(0.16, 0.44, 0.14) * scale_factor, Vector3(0, 0.18, 0), Color("#6a4f36"))
@@ -138,8 +140,9 @@ func _process(delta: float) -> void:
 			var node: Node3D = fighters[i]
 			var start: Vector3 = origins[i]
 			var sway := actor_time * 1.9 + float(i) * 1.47
-			node.position = start + Vector3(sin(sway) * 0.30, absf(sin(sway * 1.4)) * 0.07, cos(sway) * 0.23)
-			node.rotation.y = sin(sway * 0.60) * 0.18
+			if not external_combat_control:
+				node.position = start + Vector3(sin(sway) * 0.30, absf(sin(sway * 1.4)) * 0.07, cos(sway) * 0.23)
+				node.rotation.y = sin(sway * 0.60) * 0.18
 	var red_crystal: MeshInstance3D = crystal_meshes["red"]
 	var blue_crystal: MeshInstance3D = crystal_meshes["blue"]
 	red_crystal.rotation.y += delta * 0.7
