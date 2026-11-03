@@ -182,6 +182,10 @@ func _handle_packet(raw: String) -> void:
 		return
 	if game_mode != "LIVE":
 		return
+	# Interdire les evenements du simulateur dans un vrai LIVE.
+	var source := str(packet.get("source",""))
+	if source not in ["tikfinity","tiktools"]:
+		return
 	var user := str(packet.get("user","Spectateur")).strip_edges().substr(0,24)
 	if user.is_empty():
 		return
