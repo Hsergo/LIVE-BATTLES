@@ -28,6 +28,7 @@ var wood := 30.0
 var saved := 0
 var target := 12
 var rescue_queue := 0
+var next_villager_index := 0
 var crossings: Array[Dictionary] = []
 var participants: Dictionary = {}
 var contribution: Dictionary = {}
@@ -86,6 +87,7 @@ func _start_mission(reset_people: bool) -> void:
 	saved = 0
 	target = int(SCENARIOS[scenario_index]["target"])
 	rescue_queue = 0
+	next_villager_index = 0
 	crossings.clear()
 	votes = {"1":0, "2":0, "3":0}
 	weather_stage = 0
@@ -353,14 +355,16 @@ func tick(delta: float) -> void:
 		_tick_demo()
 	if rescue_queue > 0 and crossings.size() < 4 and progress >= 99.9 and strength >= 20.0:
 		rescue_queue -= 1
-		crossings.append({"p":0.0,"speed":0.245+randf_range(-0.025,0.025),"lane":randi_range(0,2)})
+		crossings.append({"p":0.0,"speed":0.245+randf_range(-0.025,0.025),
+			"lane":randi_range(0,2),"person_index":next_villager_index})
+		next_villager_index += 1
 	for crossing in crossings.duplicate():
 		crossing["p"] = minf(1.0,float(crossing["p"])+d*float(crossing["speed"]))
 		if float(crossing["p"]) >= 1.0:
 			crossings.erase(crossing)
 			saved += 1
 			strength = maxf(0.0,strength-0.6)
-			_note(("1 BATEAU GUIDE !" if scenario_index == 2 else "1 HABITANT SAUVE !") + " " + str(saved) + "/" + str(target), "success")
+			_note(("1 BATEAU GUIDE !" if str(SCENARIOS[scenario_index]["site_type"]) == "lighthouse" else "1 HABITANT SAUVE !") + " " + str(saved) + "/" + str(target), "success")
 	if saved >= target:
 		_finish(true)
 	elif strength <= 0.0 or seconds <= 0.0:
