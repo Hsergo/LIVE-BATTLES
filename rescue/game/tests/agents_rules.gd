@@ -14,7 +14,8 @@ func _run() -> void:
 	var agents: RefCounted = load("res://scripts/agents.gd").new()
 	var w: String = agents.call("welcome","alice",game)
 	check(w.contains("alice"),"Bienvenue avec pseudo authentique")
-	check(str(agents.call("welcome","alice",game")).is_empty(),"Une bienvenue par joueur")
+	var second_welcome: String = str(agents.call("welcome","alice",game))
+	check(second_welcome.is_empty(),"Une bienvenue par joueur")
 	var guidance := ""
 	for i in range(40):
 		guidance = str(agents.call("tick",0.2,game,true))
