@@ -21,12 +21,14 @@ func _run() -> void:
 	assert_that(str(model.get("status")) == "RUNNING", "Inscription declenche le jeu")
 	assert_that(model.call("receive","alice","!build"), "Commande de construction valide")
 	assert_that(float(model.get("progress")) > 14.0, "Construction ameliore le pont")
+	assert_that(int(model.get("builder_points").get("alice",0)) > 0, "Chaque construction est attribuee au vrai ouvrier")
 	assert_that(not model.call("receive","alice","!build"), "Anti-spam empeche attaque instantanee")
 	model.set("elapsed",10.0)
 	assert_that(model.call("receive","alice","!repair"), "Reparation gratuite possible")
 	assert_that(model.call("gift","alice","Rose",2), "Rose reconnue")
 	assert_that(not model.call("gift","alice","Cadeau faux",1), "Cadeaux non declares refuses")
 	assert_that(int(model.get("gifted_resources")) == 8, "Rose x2 apporte 8 materiaux")
+	assert_that(int(model.get("donor_points").get("alice",0)) == 8, "Donateurs comptabilises separement des constructeurs")
 	assert_that(model.call("gift","alice","Galaxy",1), "Galaxy declenche livraison majeure")
 	assert_that(float(model.get("protection_seconds")) > 0.0, "La digue anti-tempete est active")
 	model.set("progress",100.0)
@@ -54,6 +56,11 @@ func _run() -> void:
 	model.call("configure",true)
 	assert_that(str(model.get("status")) == "RUNNING", "Mode DEMO clairement distinct et auto-actif")
 	assert_that(model.get("participants").size() == 0, "Aucun faux spectateur genere en demonstration")
+	model.call("configure",false)
+	for i in range(65):
+		model.call("join","spectateur_%d" % i)
+	assert_that(model.get("participants").size() == 65,"65 vrais participants pris en compte sans limite de trois ouvriers")
+	assert_that(model.call("top_builders",3).is_empty(),"Aucun faux constructeur dans le classement")
 	for i in range(1250):
 		if str(model.get("status")) == "RESULT":
 			break

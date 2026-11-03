@@ -5,7 +5,7 @@ extends RefCounted
 const MAX_EVENTS := 8
 const BASE_DURATION := 160.0
 const DEMO_DURATION := 108.0
-const MAX_MEMBERS := 200
+const MAX_MEMBERS := 500
 const GIFT_RESOURCES := {"rose": 4, "gg": 4, "finger heart": 12, "doughnut": 40, "donut": 40, "galaxy": 120}
 const POWER_COSTS := [15, 40, 90]
 const BUILD_COOLDOWN := 2.0
@@ -33,6 +33,10 @@ var rescue_queue := 0
 var crossings: Array[Dictionary] = []
 var participants: Dictionary = {}
 var contribution: Dictionary = {}
+var builder_points: Dictionary = {}
+var donor_points: Dictionary = {}
+var rescuer_points: Dictionary = {}
+var lifetime_contribution: Dictionary = {}
 var cooldowns: Dictionary = {}
 var votes: Dictionary = {"1":0, "2":0, "3":0}
 var weather_stage := 0
@@ -67,6 +71,10 @@ func _start_mission(reset_people: bool) -> void:
 	if reset_people:
 		participants.clear()
 		contribution.clear()
+		builder_points.clear()
+		donor_points.clear()
+		rescuer_points.clear()
+		lifetime_contribution.clear()
 	# Les spectateurs restent inscrits entre missions ; les delais de commande, non.
 	cooldowns.clear()
 	scenario_index = (mission_index - 1) % SCENARIOS.size()
@@ -112,6 +120,9 @@ func join(user: String) -> bool:
 		return false
 	participants[name] = true
 	contribution[name] = int(contribution.get(name,0))
+	builder_points[name] = int(builder_points.get(name,0))
+	donor_points[name] = int(donor_points.get(name,0))
+	rescuer_points[name] = int(rescuer_points.get(name,0))
 	last_user = name
 	_note("@" + name + " REJOINT LES SAUVETEURS", "join", name)
 	if status == "WAITING":
@@ -137,6 +148,7 @@ func _eligible(user: String, command: String, cool: float) -> bool:
 func _credit(user: String, amount: int) -> void:
 	if not user.is_empty() and participants.has(user):
 		contribution[user] = int(contribution.get(user,0)) + amount
+		lifetime_contribution[user] = int(lifetime_contribution.get(user,0)) + amount
 
 func receive(user: String, command: String) -> bool:
 	var cmd := command.strip_edges().to_lower()
@@ -161,6 +173,8 @@ func build(user: String) -> bool:
 		gain = 6.0
 	progress = minf(100.0,progress+gain)
 	_credit(user,int(gain))
+	if participants.has(user):
+		builder_points[user] = int(builder_points.get(user,0)) + int(gain)
 	_note("@" + user + " CONSTRUIT +" + str(int(gain)) + "%", "build", user)
 	return true
 
@@ -173,6 +187,8 @@ func repair(user: String) -> bool:
 		gain = 9.0
 	strength = minf(100.0,strength+gain)
 	_credit(user,int(gain))
+	if participants.has(user):
+		builder_points[user] = int(builder_points.get(user,0)) + int(gain)
 	_note("@" + user + " REPARE " + str(SCENARIOS[scenario_index]["site"]), "repair", user)
 	return true
 
@@ -189,6 +205,8 @@ func rescue(user: String) -> bool:
 		return false
 	rescue_queue += 1
 	_credit(user,7)
+	if participants.has(user):
+		rescuer_points[user] = int(rescuer_points.get(user,0)) + 7
 	_note("@" + user + " LANCE UN SAUVETAGE !", "rescue", user)
 	return true
 
@@ -228,6 +246,8 @@ func gift(user: String, gift_name: String, count: int = 1) -> bool:
 	gifted_resources += amount
 	supply_level += amount
 	_credit(user,amount*2)
+	if participants.has(user):
+		donor_points[user] = int(donor_points.get(user,0)) + amount
 	_note("CADEAU @" + user.substr(0,16) + " • +" + str(amount) + " MATERIAUX", "gift", user)
 	while supply_level >= POWER_COSTS[2]:
 		supply_level -= POWER_COSTS[2]
@@ -330,3 +350,23 @@ func ranking(limit: int = 3) -> Array[String]:
 
 func scenario_info() -> Dictionary:
 	return SCENARIOS[scenario_index].duplicate()
+
+func top_builders(limit: int = 3) -> Array[String]:
+	return _leaders(builder_points,limit)
+
+func top_donors(limit: int = 3) -> Array[String]:
+	return _leaders(donor_points,limit)
+
+func top_rescuers(limit: int = 3) -> Array[String]:
+	return _leaders(rescuer_points,limit)
+
+func _leaders(points: Dictionary, limit: int) -> Array[String]:
+	var order: Array = points.keys()
+	order.sort_custom(func(a, b): return int(points[a]) > int(points[b]))
+	var out: Array[String] = []
+	for user in order:
+		if out.size() >= limit:
+			break
+		if int(points[user]) > 0:
+			out.append("@" + str(user).substr(0,13) + " " + str(points[user]))
+	return out
