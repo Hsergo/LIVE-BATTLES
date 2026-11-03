@@ -133,7 +133,9 @@ func _cylinder(parent: Node3D, pos: Vector3, radius: float, height: float, tint:
 func _rebuild_world() -> void:
 	if state == null:
 		return
-	var name: String = str(state.call("scenario_info").get("id","bridge"))
+	var info: Dictionary = state.call("scenario_info")
+	var name: String = str(info.get("id","bridge"))
+	var site_type: String = str(info.get("site_type","bridge"))
 	source_mission = name
 	if terrain != null:
 		terrain.free()
@@ -186,11 +188,15 @@ func _rebuild_world() -> void:
 		for j in range(4):
 			_ball(cloud,Vector3(float(j)*1.3,0.2*sin(float(j)),float(j%2)*0.75),1.8+float(j%2)*0.5,Color("#f0f4ed"))
 		clouds.append(cloud)
-	match name:
+	match site_type:
 		"dike":
 			_build_dike()
 		"lighthouse":
 			_build_lighthouse()
+		"dam":
+			_build_dam()
+		"helipad":
+			_build_helipad()
 		_:
 			_build_bridge()
 	_build_crane()
@@ -275,6 +281,50 @@ func _build_lighthouse() -> void:
 	_cylinder(terrain,Vector3(0,8.35,0),1.55,0.3,Color("#4e6770"))
 	_ball(terrain,Vector3(0,8.85,0),0.75,Color("#f6dc86"))
 	_cylinder(terrain,Vector3(0,9.42,0),1.7,0.3,Color("#b96855"))
+
+func _build_dam() -> void:
+	# Dam with physical gates and vertical maintenance modules, 3D river gorge.
+	for j in range(PLANK_COUNT):
+		var section := Node3D.new()
+		terrain.add_child(section)
+		section.position = Vector3(0.0,-0.45,-7.0+float(j)*1.0)
+		_box(section,Vector3(0,0.9,0),Vector3(2.3,3.5,0.96),Color("#9babb0"))
+		_box(section,Vector3(0,2.67,0),Vector3(2.8,0.3,1.0),Color("#c5c8c1"))
+		segments.append(section)
+	for k in range(5):
+		var zz := -5.0+float(k)*2.5
+		_cylinder(terrain,Vector3(-1.65,1.12,zz),0.2,4.3,Color("#6e747b"))
+		_cylinder(terrain,Vector3(1.65,1.12,zz),0.2,4.3,Color("#6e747b"))
+	_box(terrain,Vector3(3.5,0.14,7.8),Vector3(5.7,0.26,4.3),Color("#b2a996"))
+	_box(terrain,Vector3(2.0,1.45,6.5),Vector3(2.4,2.7,1.9),Color("#bdcec8"))
+	_box(terrain,Vector3(2.0,2.86,6.5),Vector3(2.8,0.22,2.1),Color("#4e6b79"))
+
+func _build_helipad() -> void:
+	# Rescue base with runway, two hangars and modular rescue staging platforms.
+	_box(terrain,Vector3(-3.2,0.15,0),Vector3(14.2,0.25,14.4),Color("#728c82"))
+	for j in range(PLANK_COUNT):
+		var section := Node3D.new()
+		terrain.add_child(section)
+		section.position = Vector3(-7.2+float(j)*0.96,0.56,1.0)
+		_box(section,Vector3.ZERO,Vector3(0.91,0.38,5.4),Color("#b8bba9"))
+		if j%3 == 0:
+			_box(section,Vector3(0.0,0.25,-2.45),Vector3(0.45,0.08,0.44),Color("#f9d17a"))
+		segments.append(section)
+	for x in [-12.3,7.8]:
+		_box(terrain,Vector3(x,1.7,-10.0),Vector3(4.6,3.1,5.1),Color("#b1c2bb"))
+		_box(terrain,Vector3(x,3.32,-10.0),Vector3(5.2,0.32,5.7),Color("#bc7565"))
+	# Clearly recognisable 3D helipad sign.
+	_cylinder(terrain,Vector3(-1.9,0.42,3.4),3.05,0.12,Color("#c6bfb0"))
+	_box(terrain,Vector3(-1.9,0.54,3.4),Vector3(3.4,0.05,0.44),Color("#f4e9c1"))
+	_box(terrain,Vector3(-1.9,0.54,3.4),Vector3(0.48,0.05,2.8),Color("#f4e9c1"))
+	var heli := Node3D.new()
+	terrain.add_child(heli)
+	heli.position = Vector3(0,3.3,8.0)
+	_ball(heli,Vector3.ZERO,1.1,Color("#e6b35e"))
+	_box(heli,Vector3(1.5,0.2,0.0),Vector3(2.8,0.25,0.28),Color("#e0c17e"))
+	_box(heli,Vector3(0,1.15,0),Vector3(5.4,0.08,0.15),Color("#e7e6d9"))
+	_box(heli,Vector3(0,0.24,0),Vector3(0.15,0.35,4.2),Color("#ece9df"))
+	heli.name = "RescueHelicopter"
 
 func _build_crane() -> void:
 	var crane := Node3D.new()
@@ -419,7 +469,7 @@ func record_event(event: Dictionary) -> void:
 	var name := str(event.get("user",""))
 	if not live_mode:
 		name = "DEMO" + str(randi_range(1,9))
-	if name.is_empty() or kind not in ["join","build","repair","rescue","gift"]:
+	if name.is_empty() or kind not in ["join","build","repair","rescue","gift","power"]:
 		if kind in ["danger","power"]:
 			surprise_time = 3.0
 		return
@@ -441,6 +491,8 @@ func record_event(event: Dictionary) -> void:
 			contribution_text = "SAUVETAGE !"
 		"gift":
 			contribution_text = "RENFORT !"
+		"power":
+			contribution_text = "ACTION SPECIALE !"
 	action_tag.text = contribution_text
 	actor["last_used"] = clock
 	focus_user = name
@@ -469,9 +521,9 @@ func _animate_workers(delta: float) -> void:
 		var target := slot_pos + Vector3(0,0.0,sin(t*0.5+float(actor["slot"]))*0.16)
 		if remaining > 0.0:
 			var work_x := -6.7+float(int(float(state.get("progress"))/100.0*14.0))
-			if source_mission == "lighthouse":
+			if str(state.call("scenario_info").get("site_type")) == "lighthouse":
 				target = Vector3(-1.7,0.18,float(int(actor["slot"])%8)*0.6-2.4)
-			elif source_mission == "dike":
+			elif str(state.call("scenario_info").get("site_type")) == "dike":
 				target = Vector3(-2.7,0.16,float(int(actor["slot"])%12)*0.72-4.0)
 			else:
 				target = Vector3(work_x-1.1,0.18,float(int(actor["slot"])%12)*0.54-3.1)
@@ -493,11 +545,11 @@ func _animate_rescues() -> void:
 		if idx < crossing.size():
 			var p := float(crossing[idx].get("p",0.0))
 			boat.visible = true
-			if source_mission == "lighthouse":
+			if str(state.call("scenario_info").get("site_type")) == "lighthouse":
 				boat.position = Vector3(-5.7+p*11.4,-0.19,2.4+float(idx)*1.4)
 			else:
 				boat.position = Vector3(-6.2+p*12.4,1.13,0.25+float(idx)*0.52)
-			boat.rotation.y = -0.4 if source_mission == "lighthouse" else 0.0
+			boat.rotation.y = -0.4 if str(state.call("scenario_info").get("site_type")) == "lighthouse" else 0.0
 		idx += 1
 
 func _process(delta: float) -> void:

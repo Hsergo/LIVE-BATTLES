@@ -5,6 +5,8 @@ const aliases = new Map([
   ['!build','!build'],['!construire','!build'],
   ['!repair','!repair'],['!reparer','!repair'],['!réparer','!repair'],
   ['!rescue','!rescue'],['!sauver','!rescue'],
+  ['!regles','!rules'],['!règles','!rules'],['!rules','!rules'],['!aide','!rules'],['!help','!rules'],
+  ['!escort','!special'],['!pump','!special'],['!signal','!special'],['!valve','!special'],['!launch','!special'],['!special','!special'],
   ['1','1'],['2','2'],['3','3'],
   ['!vote 1','1'],['!vote 2','2'],['!vote 3','3'],
   ['!voter 1','1'],['!voter 2','2'],['!voter 3','3'],
