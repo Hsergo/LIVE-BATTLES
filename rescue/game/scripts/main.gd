@@ -451,7 +451,7 @@ func draw_ellipse_shadow(at: Vector2, width: float) -> void:
 	draw_circle(at+Vector2(0,21),width,Color(0.01,0.14,0.18,0.27))
 
 func _draw_people() -> void:
-	var rank: Array = state.get("ranking").call(6) if false else []
+	var rank: Array = []
 	# Le rendu des participants LIVE ne cree jamais de pseudo fictif.
 	if game_mode == "LIVE":
 		for user in state.get("participants").keys():
@@ -532,7 +532,7 @@ func _draw_result() -> void:
 		var color := Color("#ffd77b") if i < stars else Color("#476071")
 		_star(Vector2(x,551),28,color)
 	_text("BRAVO A TOUS LES CONSTRUCTEURS",Vector2(70,635),21,Color("#c9dfec"),true,580)
-	var leaders: Array = state.get("ranking").call(3) if false else []
+	var leaders: Array = []
 	var contributors: Dictionary = state.get("contribution")
 	var order: Array = contributors.keys()
 	order.sort_custom(func(a,b):return int(contributors[a])>int(contributors[b]))

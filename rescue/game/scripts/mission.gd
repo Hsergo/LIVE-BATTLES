@@ -258,7 +258,7 @@ func tick(delta: float) -> void:
 		_tick_demo()
 	if rescue_queue > 0 and crossings.size() < 4 and progress >= 78.0 and strength >= 20.0:
 		rescue_queue -= 1
-		crossings.append({"p":0.0,"speed":0.23+randf_range(-0.035,0.035),"lane":randi_range(0,2)})
+		crossings.append({"p":0.0,"speed":0.245+randf_range(-0.025,0.025),"lane":randi_range(0,2)})
 	for crossing in crossings.duplicate():
 		crossing["p"] = minf(1.0,float(crossing["p"])+d*float(crossing["speed"]))
 		if float(crossing["p"]) >= 1.0:

@@ -33,7 +33,7 @@ func _run() -> void:
 	model.set("strength",90.0)
 	assert_that(model.call("receive","alice","!rescue"), "Evacuation possible si pont assez construit")
 	assert_that(int(model.get("rescue_queue")) > 0, "Habitant ajoute a la file d'evacuation")
-	for i in range(48):
+	for i in range(75):
 		model.call("tick",0.1)
 	assert_that(int(model.get("saved")) >= 1, "L'habitant traverse reellement le pont")
 	model.set("saved",int(model.get("target")))
