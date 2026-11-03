@@ -107,7 +107,7 @@ async function connectTikTok(userValue) {
 
   let TikTokLiveConnection;
   try {
-    ({ TikTokLiveConnection } = require('tiktok-live-connector'));
+    ({ TikTokLiveConnection } = await import('tiktok-live-connector'));
   } catch (e) {
     message('Module TikTok indisponible');
     console.error(e.message);
@@ -117,25 +117,31 @@ async function connectTikTok(userValue) {
   const active = new TikTokLiveConnection(name);
   connector = active;
 
-  active.on('chat', e => chat(e.uniqueId || e.nickname, e.comment, e.msgId ? String(e.msgId) : null));
+  active.on('chat', e => chat(e.user?.uniqueId || e.uniqueId || e.user?.nickname || e.nickname, e.comment, (e.common?.msgId || e.msgId) ? String(e.common?.msgId || e.msgId) : null));
   active.on('gift', e => {
     if (!shouldCountGift(e)) return;
     gift(
       e.uniqueId || e.nickname,
-      e.giftName || e.gift?.name || 'Cadeau',
-      e.repeatCount || 1,
-      e.msgId ? String(e.msgId) : null
+      e.gift?.name || e.gift?.giftDetails?.giftName || e.giftName || 'Cadeau',
+      e.repeatCount || e.repeat_count || 1,
+      (e.common?.msgId || e.msgId) ? String(e.common?.msgId || e.msgId) : null
     );
   });
   active.on('like', e => event({
     event: 'like',
     user: sanitizedUsername(e.uniqueId || e.nickname),
-    count: Number(e.likeCount) || 1
+    count: Number(e.likeCount || e.count) || 1
   }));
-  active.on('follow', e => event({
-    event: 'follow',
-    user: sanitizedUsername(e.uniqueId || e.nickname)
-  }));
+  active.on('social', e => {
+    const action = String(e.displayType || e.label || '').toLowerCase();
+    if (action.includes('follow') || action.includes('abonn')) {
+      event({
+        event: 'follow',
+        user: sanitizedUsername(e.user?.uniqueId || e.uniqueId || e.user?.nickname || e.nickname)
+      });
+    }
+  });
+
   active.on('disconnected', () => {
     if (connector === active) {
       message('TikTok deconnecte, nouvelle tentative...');
