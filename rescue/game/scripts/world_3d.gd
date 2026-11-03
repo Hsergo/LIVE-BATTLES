@@ -452,6 +452,25 @@ func _worker(name: String) -> Dictionary:
 	limbs["last_used"] = clock
 	limbs["slot"] = total_spawned % MAX_RENDERED_WORKERS
 	total_spawned += 1
+	# Limit skinned rigs to one worker in six. Others use the lightweight fallback.
+	# This keeps the render predictable with up to 48 simultaneously visible workers.
+	if int(limbs["slot"]) % 6 == 0:
+		var avatar := load("res://scripts/rigged_humanoid.gd").new() as Node3D
+		rig.add_child(avatar)
+		if bool(avatar.call("setup",1.16)):
+			for part in rig.get_children():
+				if part != avatar and part != tag and part != action_tag:
+					if part is Node3D:
+						(part as Node3D).visible = false
+			# Safety clothing cues on top of the genuine skinned body.
+			_cylinder(rig,Vector3(0,1.85,0),0.29,0.19,Color("#ffca54"))
+			_box(rig,Vector3(0,1.76,0.19),Vector3(0.61,0.075,0.22),Color("#ffca54"))
+			_box(rig,Vector3(-0.27,1.17,0.18),Vector3(0.075,0.62,0.06),Color("#fbd46b"))
+			_box(rig,Vector3(0.27,1.17,0.18),Vector3(0.075,0.62,0.06),Color("#fbd46b"))
+			limbs["avatar"] = avatar
+			tag.position.y = 2.44
+		else:
+			avatar.queue_free()
 	rig.position = _worker_position(int(limbs["slot"]))
 	return limbs
 
@@ -580,6 +599,11 @@ func _animate_workers(delta: float) -> void:
 		(actor["left_leg"] as Node3D).rotation.x = -swing*0.35
 		(actor["right_leg"] as Node3D).rotation.x = swing*0.35
 		rig.rotation.y = lerp_angle(rig.rotation.y,0.6 if fighting else -0.25,minf(1.0,delta*2.0))
+		if actor.has("avatar"):
+			var avatar: Node3D = actor["avatar"]
+			if is_instance_valid(avatar):
+				var gait_state := str(actor["action"]) if fighting else ("walk" if walking else "idle")
+				avatar.call("animate",delta,gait_state)
 
 func _animate_rescues() -> void:
 	# Boats are a real visual only during maritime rescue missions.

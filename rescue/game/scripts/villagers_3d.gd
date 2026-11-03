@@ -148,6 +148,18 @@ func _create_civilian(index: int) -> Dictionary:
 	joints["phase"] = "waiting"
 	joints["height"] = 0.76 if is_child else 1.0
 	joints["previous_position"] = Vector3.ZERO
+	# Use the licensed humanoid model on a subset of adults. Children and
+	# elders retain distinct procedural silhouettes until suitable CC0 rigs exist.
+	if not is_child and not is_elder and index % 5 == 0:
+		var avatar := load("res://scripts/rigged_humanoid.gd").new() as Node3D
+		person.add_child(avatar)
+		if bool(avatar.call("setup",1.03)):
+			for visual in person.get_children():
+				if visual != avatar and visual is Node3D:
+					(visual as Node3D).visible = false
+			joints["avatar"] = avatar
+		else:
+			avatar.queue_free()
 	person.position = _waiting_position(index)
 	return joints
 
@@ -245,6 +257,10 @@ func sync(delta: float) -> void:
 		(actor["right_arm"] as Node3D).rotation.x = -swing
 		(actor["left_leg"] as Node3D).rotation.x = -swing*0.60
 		(actor["right_leg"] as Node3D).rotation.x = swing*0.60
+		if actor.has("avatar"):
+			var avatar: Node3D = actor["avatar"]
+			if is_instance_valid(avatar):
+				avatar.call("animate",d,"walk" if walk else ("celebrate" if phase=="safe" else "idle"))
 		if phase=="safe" and not walk:
 			(actor["right_arm"] as Node3D).rotation.z = 0.50+0.25*sin(t*4.3+float(idx))
 		else:
