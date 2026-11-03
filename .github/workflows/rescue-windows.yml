@@ -53,6 +53,14 @@ jobs:
           & $godot.FullName --headless --path rescue/game --script res://tests/mission_rules.gd
           if ($LASTEXITCODE -ne 0) { throw 'Regles de la mission invalides' }
 
+      - name: Tester les agents autonomes locaux
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
+          if (-not $godot) { throw 'Godot absent' }
+          & $godot.FullName --headless --path rescue/game --script res://tests/agents_rules.gd
+          if ($LASTEXITCODE -ne 0) { throw 'Agents de mission invalides' }
+
       - name: Importer et exporter le jeu Windows
         run: |
           $ErrorActionPreference = 'Stop'
