@@ -1,0 +1,105 @@
+name: LIVE BATTLES Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Recuperer le projet
+        uses: actions/checkout@v4
+
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Installer et tester la passerelle
+        working-directory: bridge
+        shell: pwsh
+        run: |
+          npm install --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'npm install echoue' }
+          npm test
+          if ($LASTEXITCODE -ne 0) { throw 'Tests bridge echoues' }
+
+      - name: Installer Godot et ses modeles d'export
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = '4.5.2-stable'
+          $base = "https://github.com/godotengine/godot/releases/download/$version"
+          New-Item -ItemType Directory -Force tools/godot | Out-Null
+          Invoke-WebRequest -Uri "$base/Godot_v4.5.2-stable_win64.exe.zip" -OutFile godot.zip
+          Expand-Archive godot.zip -DestinationPath tools/godot -Force
+          Invoke-WebRequest -Uri "$base/Godot_v4.5.2-stable_export_templates.tpz" -OutFile templates.tpz
+          Copy-Item templates.tpz templates.zip
+          Expand-Archive templates.zip -DestinationPath tools/templates -Force
+          $target = Join-Path $env:APPDATA 'Godot\export_templates\4.5.2.stable'
+          New-Item -ItemType Directory -Force $target | Out-Null
+          Copy-Item tools/templates/templates/* $target -Recurse -Force
+
+      - name: Exporter le jeu Godot
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $godot = Get-ChildItem tools/godot -Recurse -Filter 'Godot*_win64.exe' | Select-Object -First 1
+          if (-not $godot) { throw 'Executable Godot absent' }
+          $exe = $godot.FullName
+          New-Item -ItemType Directory -Force dist/game | Out-Null
+          & $exe --headless --path game --editor --quit
+          if ($LASTEXITCODE -ne 0) { throw 'Import Godot echoue' }
+          & $exe --headless --path game --export-release 'Windows Desktop' (Join-Path $PWD 'dist/game/LiveBattle.exe')
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path dist/game/LiveBattle.exe)) {
+            throw 'Export Godot echoue'
+          }
+          if (-not (Test-Path dist/game/LiveBattle.pck)) {
+            Write-Host 'L export peut embarquer le .pck selon la configuration.'
+          }
+
+      - name: Packager la version autonome
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force dist/runtime,dist/bridge,dist/launcher,release | Out-Null
+          Copy-Item (Get-Command node).Source dist/runtime/node.exe
+          Copy-Item bridge/index.js dist/bridge/index.js
+          Copy-Item bridge/src dist/bridge/src -Recurse
+          Copy-Item bridge/config dist/bridge/config -Recurse
+          Copy-Item bridge/node_modules dist/bridge/node_modules -Recurse
+          Copy-Item launcher/start.ps1 dist/launcher/start.ps1
+          Copy-Item launcher/DEMARRER-LIVE-BATTLE.cmd dist/DEMARRER-LIVE-BATTLE.cmd
+          Compress-Archive -Path dist/* -DestinationPath release/LIVE-BATTLE-Portable-x64.zip -Force
+
+      - name: Installer Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup indisponible' }
+
+      - name: Creer l'installateur Windows
+        shell: pwsh
+        run: |
+          $compiler = @(
+            'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
+            'C:\Program Files\Inno Setup 6\ISCC.exe',
+            'C:\Program Files\Inno Setup 7\ISCC.exe',
+            'C:\Program Files (x86)\Inno Setup 7\ISCC.exe'
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $compiler) { throw 'Compilateur Inno Setup absent' }
+          & $compiler installer/live-battle.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Compilation installateur echouee' }
+          if (-not (Test-Path release/LIVE-BATTLE-Setup-x64.exe)) { throw 'Setup non cree' }
+
+      - name: Publier la distribution Windows
+        uses: actions/upload-artifact@v4
+        with:
+          name: LIVE-BATTLE-WINDOWS
+          path: |
+            release/LIVE-BATTLE-Portable-x64.zip
+            release/LIVE-BATTLE-Setup-x64.exe
+          if-no-files-found: error
