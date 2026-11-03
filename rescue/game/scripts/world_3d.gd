@@ -273,6 +273,8 @@ func _build_bridge() -> void:
 	# Steel trusses show this as a load-bearing bridge rather than flat tiles.
 	for z in [-1.5,1.5]:
 		_box(terrain,Vector3(0,0.38,z),Vector3(14.8,0.15,0.18),Color("#7f9192"),0.45)
+		# Physics fences keep evacuated pedestrians inside the bridge deck.
+		_add_rail_collider(Vector3(0,1.59,z*1.13),Vector3(15.4,0.63,0.18))
 	for j in range(6):
 		_cylinder(terrain,Vector3(-5.8+float(j)*2.3,-0.45,1.8),0.2,1.25,Color("#789092"))
 	_box(terrain,Vector3(-9.0,0.5,0),Vector3(3.6,0.5,4.2),Color("#ae9671"))
@@ -389,39 +391,43 @@ func _update_segments(completion: float) -> void:
 			body.collision_layer = 1 if built else 0
 
 func _worker(name: String) -> Dictionary:
-	var rig := Node3D.new()
+	var rig: CharacterBody3D = load("res://scripts/character_motor_3d.gd").new()
 	terrain.add_child(rig)
+	rig.call("configure",4,0.255,1.73)
+	var model_root := Node3D.new()
+	model_root.name = "WorkerAppearance"
+	rig.add_child(model_root)
 	rig.name = "Worker_" + name.substr(0,15)
 	var u_hash := absi(name.hash())
 	var skin_color: Color = SKIN[u_hash % SKIN.size()]
 	var uniform: Color = UNIFORMS[u_hash % UNIFORMS.size()]
 	var helmet_color := Color("#ffcb51") if u_hash % 3 == 0 else (Color("#edebdf") if u_hash % 3 == 1 else Color("#eaa54d"))
-	rig.scale = Vector3(0.94+float(u_hash%5)*0.02,0.95+float(int(u_hash/5)%5)*0.021,1.0)
+	model_root.scale = Vector3(0.94+float(u_hash%5)*0.02,0.95+float(int(u_hash/5)%5)*0.021,1.0)
 	# Safety boots, trousers, detailed vest, independent articulated arms and legs.
-	_box(rig,Vector3(0,1.02,0),Vector3(0.62,0.84,0.40),uniform)
-	_box(rig,Vector3(0,1.25,0.22),Vector3(0.58,0.09,0.055),Color("#fbe5a1"))
-	_box(rig,Vector3(0,0.84,0.22),Vector3(0.58,0.07,0.055),Color("#fbe5a1"))
+	_box(model_root,Vector3(0,1.02,0),Vector3(0.62,0.84,0.40),uniform)
+	_box(model_root,Vector3(0,1.25,0.22),Vector3(0.58,0.09,0.055),Color("#fbe5a1"))
+	_box(model_root,Vector3(0,0.84,0.22),Vector3(0.58,0.07,0.055),Color("#fbe5a1"))
 	# Reflective safety vest, chest zipper, utility belt and radio badge.
-	_box(rig,Vector3(0,1.03,0.232),Vector3(0.04,0.67,0.04),Color("#efe8c5"))
-	_box(rig,Vector3(0,0.65,0),Vector3(0.68,0.17,0.47),Color("#56483c"))
-	_box(rig,Vector3(-0.19,0.65,0.266),Vector3(0.22,0.18,0.13),Color("#96795a"))
-	_box(rig,Vector3(0.21,1.28,0.258),Vector3(0.15,0.12,0.045),Color("#f7efe1"))
-	_box(rig,Vector3(0,1.65,0),Vector3(0.24,0.26,0.25),skin_color)
-	_ball(rig,Vector3(0,1.89,0),0.30,skin_color)
-	_cylinder(rig,Vector3(0,2.13,0),0.34,0.23,helmet_color)
-	_box(rig,Vector3(0,2.01,0.20),Vector3(0.71,0.08,0.26),helmet_color)
-	_box(rig,Vector3(0,2.22,0.0),Vector3(0.15,0.055,0.51),helmet_color.lightened(0.2))
+	_box(model_root,Vector3(0,1.03,0.232),Vector3(0.04,0.67,0.04),Color("#efe8c5"))
+	_box(model_root,Vector3(0,0.65,0),Vector3(0.68,0.17,0.47),Color("#56483c"))
+	_box(model_root,Vector3(-0.19,0.65,0.266),Vector3(0.22,0.18,0.13),Color("#96795a"))
+	_box(model_root,Vector3(0.21,1.28,0.258),Vector3(0.15,0.12,0.045),Color("#f7efe1"))
+	_box(model_root,Vector3(0,1.65,0),Vector3(0.24,0.26,0.25),skin_color)
+	_ball(model_root,Vector3(0,1.89,0),0.30,skin_color)
+	_cylinder(model_root,Vector3(0,2.13,0),0.34,0.23,helmet_color)
+	_box(model_root,Vector3(0,2.01,0.20),Vector3(0.71,0.08,0.26),helmet_color)
+	_box(model_root,Vector3(0,2.22,0.0),Vector3(0.15,0.055,0.51),helmet_color.lightened(0.2))
 	# Chin strap and facial features for a less toy-like worker silhouette.
-	_box(rig,Vector3(0,1.69,0.0),Vector3(0.038,0.12,0.41),Color("#575551"))
-	_ball(rig,Vector3(0,1.87,0.285),0.045,skin_color.darkened(0.1))
-	_box(rig,Vector3(0,1.765,0.286),Vector3(0.12,0.028,0.028),Color("#85544a"))
+	_box(model_root,Vector3(0,1.69,0.0),Vector3(0.038,0.12,0.41),Color("#575551"))
+	_ball(model_root,Vector3(0,1.87,0.285),0.045,skin_color.darkened(0.1))
+	_box(model_root,Vector3(0,1.765,0.286),Vector3(0.12,0.028,0.028),Color("#85544a"))
 	for side in [-1.0,1.0]:
-		_ball(rig,Vector3(side*0.10,1.91,0.275),0.034,Color("#273b4b"))
+		_ball(model_root,Vector3(side*0.10,1.91,0.275),0.034,Color("#273b4b"))
 	var limbs: Dictionary = {}
 	for side in ["left","right"]:
 		var factor := -1.0 if side=="left" else 1.0
 		var arm := Node3D.new()
-		rig.add_child(arm)
+		model_root.add_child(arm)
 		arm.position = Vector3(factor*0.39,1.40,0)
 		_box(arm,Vector3(factor*0.045,-0.31,0),Vector3(0.21,0.67,0.25),uniform.darkened(0.1))
 		_ball(arm,Vector3(factor*0.045,-0.67,0),0.115,Color("#d5bd90"))
@@ -443,14 +449,14 @@ func _worker(name: String) -> Dictionary:
 			limbs["tool"] = hand_tool
 		limbs[side+"_arm"] = arm
 		var leg := Node3D.new()
-		rig.add_child(leg)
+		model_root.add_child(leg)
 		leg.position = Vector3(factor*0.17,0.7,0)
 		_box(leg,Vector3(0,-0.23,0),Vector3(0.23,0.49,0.30),Color("#293e57"))
 		_box(leg,Vector3(0,-0.53,0.08),Vector3(0.29,0.14,0.43),Color("#25313a"))
 		limbs[side+"_leg"] = leg
 	# Each active worker gets an identifier that follows the 3D rig and faces the camera.
 	var tag := Label3D.new()
-	rig.add_child(tag)
+	model_root.add_child(tag)
 	tag.text = "@" + name.substr(0,15) if live_mode else "DEMO"
 	tag.position = Vector3(0,2.68,0)
 	tag.font_size = 46
@@ -459,7 +465,7 @@ func _worker(name: String) -> Dictionary:
 	tag.outline_size = 8
 	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	var action_tag := Label3D.new()
-	rig.add_child(action_tag)
+	model_root.add_child(action_tag)
 	action_tag.text = ""
 	action_tag.visible = false
 	action_tag.position = Vector3(0,3.16,0)
@@ -469,6 +475,7 @@ func _worker(name: String) -> Dictionary:
 	action_tag.outline_size = 9
 	action_tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	limbs["rig"] = rig
+	limbs["visual"] = model_root
 	limbs["label"] = tag
 	limbs["action_tag"] = action_tag
 	limbs["age"] = 0.0
@@ -489,10 +496,10 @@ func _worker(name: String) -> Dictionary:
 					if part is Node3D:
 						(part as Node3D).visible = false
 			# Safety clothing cues on top of the genuine skinned body.
-			_cylinder(rig,Vector3(0,1.85,0),0.29,0.19,Color("#ffca54"))
-			_box(rig,Vector3(0,1.76,0.19),Vector3(0.61,0.075,0.22),Color("#ffca54"))
-			_box(rig,Vector3(-0.27,1.17,0.18),Vector3(0.075,0.62,0.06),Color("#fbd46b"))
-			_box(rig,Vector3(0.27,1.17,0.18),Vector3(0.075,0.62,0.06),Color("#fbd46b"))
+			_cylinder(model_root,Vector3(0,1.85,0),0.29,0.19,Color("#ffca54"))
+			_box(model_root,Vector3(0,1.76,0.19),Vector3(0.61,0.075,0.22),Color("#ffca54"))
+			_box(model_root,Vector3(-0.27,1.17,0.18),Vector3(0.075,0.62,0.06),Color("#fbd46b"))
+			_box(model_root,Vector3(0.27,1.17,0.18),Vector3(0.075,0.62,0.06),Color("#fbd46b"))
 			limbs["avatar"] = avatar
 			tag.position.y = 2.44
 		else:
@@ -615,10 +622,11 @@ func _animate_workers(delta: float) -> void:
 				target = Vector3(-2.7,0.16,float(int(actor["slot"])%12)*0.72-4.0)
 			else:
 				target = Vector3(work_x-1.1,0.18,float(int(actor["slot"])%12)*0.54-3.1)
-		rig.position = rig.position.lerp(target,minf(1.0,delta*2.9))
-		rig.position.y += sin(t*7.2)*0.003 if remaining>0 else sin(t*1.3)*0.001
+		var moved: Vector3 = rig.call("move_to",target,5.7 if remaining > 0.0 else 2.9,delta)
+		var visual: Node3D = actor["visual"]
+		visual.position.y = 0.018*sin(t*7.2) if remaining > 0.0 else 0.005*sin(t*1.3)
 		var fighting := remaining > 0.0
-		var walking := rig.position.distance_to(target) > 0.35
+		var walking := moved.length_squared() > 0.000003
 		var swing := sin(t*(10.0 if fighting else (7.0 if walking else 2.0)))*(0.92 if fighting else (0.47 if walking else 0.07))
 		(actor["left_arm"] as Node3D).rotation.x = swing
 		(actor["right_arm"] as Node3D).rotation.x = -swing*0.8
@@ -695,10 +703,6 @@ func _process(delta: float) -> void:
 		roster_clock = 0.0
 		cached_roster_size = roster_size
 		_sync_workers()
-	_animate_workers(d)
-	_animate_rescues()
-	if civilians != null and is_instance_valid(civilians):
-		civilians.call("sync",d)
 	_animate_environment(d)
 
 func visible_workers() -> int:
@@ -760,3 +764,25 @@ func visible_civilians() -> int:
 
 func crossing_civilians() -> int:
 	return int(civilians.call("movement_count")) if civilians != null else 0
+
+func _physics_process(delta: float) -> void:
+	# CharacterBody3D movement must happen on the fixed physics clock.
+	if state == null or terrain == null:
+		return
+	var d := minf(0.1,delta)
+	if civilians != null and is_instance_valid(civilians):
+		civilians.call("sync",d)
+	_animate_workers(d)
+	_animate_rescues()
+
+func _add_rail_collider(at: Vector3, box_size: Vector3) -> void:
+	var obstacle := StaticBody3D.new()
+	obstacle.collision_layer = 1
+	obstacle.collision_mask = 0
+	obstacle.position = at
+	var collider := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = box_size
+	collider.shape = shape
+	obstacle.add_child(collider)
+	terrain.add_child(obstacle)
