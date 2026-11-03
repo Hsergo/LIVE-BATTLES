@@ -370,7 +370,7 @@ func _worker(name: String) -> Dictionary:
 	var skin_color: Color = SKIN[u_hash % SKIN.size()]
 	var uniform: Color = UNIFORMS[u_hash % UNIFORMS.size()]
 	var helmet_color := Color("#ffcb51") if u_hash % 3 == 0 else (Color("#edebdf") if u_hash % 3 == 1 else Color("#eaa54d"))
-	rig.scale = Vector3(0.94+float(u_hash%5)*0.02,0.95+float((u_hash/5)%5)*0.021,1.0)
+	rig.scale = Vector3(0.94+float(u_hash%5)*0.02,0.95+float(int(u_hash/5)%5)*0.021,1.0)
 	# Safety boots, trousers, detailed vest, independent articulated arms and legs.
 	_box(rig,Vector3(0,1.02,0),Vector3(0.62,0.84,0.40),uniform)
 	_box(rig,Vector3(0,1.25,0.22),Vector3(0.58,0.09,0.055),Color("#fbe5a1"))

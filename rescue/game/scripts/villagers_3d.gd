@@ -260,3 +260,11 @@ func visible_count() -> int:
 
 func movement_count() -> int:
 	return count_away
+
+func last_rescued_position() -> Vector3:
+	if crowd.is_empty() or mission == null:
+		return Vector3(12.0,0.2,0.0)
+	var last_index := clampi(int(mission.get("saved"))-1,0,crowd.size()-1)
+	var actor: Dictionary = crowd[last_index]
+	var rig: Node3D = actor["node"]
+	return rig.position if is_instance_valid(rig) else _safe_position(last_index)
