@@ -134,6 +134,20 @@ func _cylinder(parent: Node3D, pos: Vector3, radius: float, height: float, tint:
 	parent.add_child(item)
 	return item
 
+func _collider(parent: Node3D, pos: Vector3, dimensions: Vector3) -> StaticBody3D:
+	var body := StaticBody3D.new()
+	body.name = "StructureCollider"
+	body.position = pos
+	body.collision_layer = 1
+	body.collision_mask = 1
+	parent.add_child(body)
+	var collision := CollisionShape3D.new()
+	var shape := BoxShape3D.new()
+	shape.size = dimensions
+	collision.shape = shape
+	body.add_child(collision)
+	return body
+
 func _rebuild_world() -> void:
 	if state == null:
 		return
@@ -161,6 +175,9 @@ func _rebuild_world() -> void:
 	_box(terrain,Vector3(0,-2.4,0),Vector3(52,2.5,48),Color("#4b805d"))
 	_box(terrain,Vector3(-15.0,-0.85,0),Vector3(19,1.25,39),Color("#71a06a"))
 	_box(terrain,Vector3(15.0,-0.85,0),Vector3(19,1.25,39),Color("#6b9b66"))
+	# Static collision banks do not depend on render visibility.
+	_collider(terrain,Vector3(-15.0,-0.85,0),Vector3(19,1.25,39))
+	_collider(terrain,Vector3(15.0,-0.85,0),Vector3(19,1.25,39))
 	water = _box(terrain,Vector3(0,-0.68,0),Vector3(11.5,0.18,42),Color("#257a98"))
 	# Riverbanks and rocks, with small irregular geometry.
 	for i in range(24):
@@ -248,6 +265,7 @@ func _build_bridge() -> void:
 		terrain.add_child(plank)
 		plank.position = Vector3(x,1.17,0)
 		_box(plank,Vector3.ZERO,Vector3(0.98,0.22,3.1),Color("#bf8352"))
+		_collider(plank,Vector3.ZERO,Vector3(0.98,0.27,3.1))
 		for z in [-1.36,1.36]:
 			_box(plank,Vector3(0,0.36,z),Vector3(0.16,0.8,0.16),Color("#e4d19c"))
 			_box(plank,Vector3(0,0.8,z),Vector3(0.96,0.14,0.12),Color("#d8c39b"))
@@ -268,6 +286,7 @@ func _build_dike() -> void:
 		wall.position = Vector3(0,0.1,z)
 		terrain.add_child(wall)
 		_box(wall,Vector3.ZERO,Vector3(2.3,2.6,0.95),Color("#c4b19a"))
+		_collider(wall,Vector3.ZERO,Vector3(2.3,2.6,0.95))
 		_box(wall,Vector3(0,1.36,0),Vector3(2.5,0.24,0.98),Color("#f1d1a1"))
 		segments.append(wall)
 	_box(terrain,Vector3(8.0,0.13,0),Vector3(6.0,0.2,5.0),Color("#a2aa8d"))
@@ -285,6 +304,7 @@ func _build_lighthouse() -> void:
 		part.position = Vector3(0,0.3 + float(j)*0.52,0)
 		var taper := 1.0 - float(j)*0.019
 		_cylinder(part,Vector3.ZERO,1.32*taper,0.5,Color("#e3ded1") if j%2==0 else Color("#d2a18c"))
+		_collider(part,Vector3.ZERO,Vector3(2.64*taper,0.5,2.64*taper))
 		if j%3 == 0:
 			_box(part,Vector3(0,0,1.37*taper),Vector3(0.36,0.23,0.12),Color("#5a9aa6"))
 		segments.append(part)
@@ -299,6 +319,7 @@ func _build_dam() -> void:
 		terrain.add_child(section)
 		section.position = Vector3(0.0,-0.45,-7.0+float(j)*1.0)
 		_box(section,Vector3(0,0.9,0),Vector3(2.3,3.5,0.96),Color("#9babb0"))
+		_collider(section,Vector3(0,0.9,0),Vector3(2.3,3.5,0.96))
 		_box(section,Vector3(0,2.67,0),Vector3(2.8,0.3,1.0),Color("#c5c8c1"))
 		segments.append(section)
 	for k in range(5):
@@ -317,6 +338,7 @@ func _build_helipad() -> void:
 		terrain.add_child(section)
 		section.position = Vector3(-7.2+float(j)*0.96,0.56,1.0)
 		_box(section,Vector3.ZERO,Vector3(0.91,0.38,5.4),Color("#b8bba9"))
+		_collider(section,Vector3.ZERO,Vector3(0.91,0.38,5.4))
 		if j%3 == 0:
 			_box(section,Vector3(0.0,0.25,-2.45),Vector3(0.45,0.08,0.44),Color("#f9d17a"))
 		segments.append(section)
@@ -360,7 +382,11 @@ func _build_boats() -> void:
 func _update_segments(completion: float) -> void:
 	var count := int(ceil(clampf(completion,0.0,100.0)/100.0*float(PLANK_COUNT)))
 	for index in range(segments.size()):
-		segments[index].visible = index < count
+		var built := index < count
+		segments[index].visible = built
+		var body := segments[index].get_node_or_null("StructureCollider") as StaticBody3D
+		if body != null:
+			body.collision_layer = 1 if built else 0
 
 func _worker(name: String) -> Dictionary:
 	var rig := Node3D.new()

@@ -366,7 +366,11 @@ func tick(delta: float) -> void:
 			"lane":randi_range(0,2),"person_index":next_villager_index})
 		next_villager_index += 1
 	for crossing in crossings.duplicate():
-		crossing["p"] = minf(1.0,float(crossing["p"])+d*float(crossing["speed"]))
+		# A destroyed or severely damaged construction temporarily stops evacuation
+		# until real players repair it. Civilian positions remain stable meanwhile.
+		var safe_crossing := progress >= 99.9 and strength >= 20.0
+		if safe_crossing:
+			crossing["p"] = minf(1.0,float(crossing["p"])+d*float(crossing["speed"]))
 		if float(crossing["p"]) >= 1.0:
 			crossings.erase(crossing)
 			saved += 1
