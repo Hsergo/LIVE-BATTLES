@@ -25,6 +25,8 @@ var count_safe := 0
 var count_waiting := 0
 var waiting_sign: Label3D
 var safe_sign: Label3D
+var rescue_started: Dictionary = {}
+var last_safely_arrived := 0
 
 func setup(game: RefCounted, scene_type: String) -> void:
 	mission = game
@@ -33,6 +35,8 @@ func setup(game: RefCounted, scene_type: String) -> void:
 	for child in get_children():
 		child.queue_free()
 	crowd.clear()
+	rescue_started.clear()
+	last_safely_arrived = 0
 	var amount := mini(int(game.get("target")),MAX_CIVILIANS)
 	for idx in range(amount):
 		crowd.append(_create_civilian(idx))
@@ -109,6 +113,7 @@ func _create_civilian(index: int) -> Dictionary:
 	person.add_child(visual)
 	var is_child := index%6 == 2
 	var is_elder := index%7 == 4
+	var is_responder_family := index%8 == 1
 	person.call("configure",2,0.185 if is_child else 0.22,1.13 if is_child else 1.44)
 	visual.scale = Vector3.ONE * (0.72 if is_child else (0.91 if is_elder else 0.99+float(index%3)*0.035))
 	var skin: Color = SKIN[(index*7+2)%SKIN.size()]
@@ -131,6 +136,19 @@ func _create_civilian(index: int) -> Dictionary:
 		_box(visual,Vector3(-0.20,1.14,0.035),Vector3(0.06,0.78,0.05),Color("#d9b97d"))
 	if is_elder:
 		_box(visual,Vector3(0.40,0.52,0.07),Vector3(0.065,1.0,0.055),Color("#bba281"))
+	if is_child:
+		# A small school backpack and cap help viewers identify children.
+		_box(visual,Vector3(0,1.08,-0.31),Vector3(0.44,0.50,0.22),Color("#d4a44f"))
+		_box(visual,Vector3(0,2.11,0.09),Vector3(0.50,0.09,0.29),Color("#e9b66f"))
+	if is_responder_family:
+		# Emergency red armband: visual storytelling without text clutter.
+		_box(visual,Vector3(0.33,1.38,0.02),Vector3(0.16,0.15,0.25),Color("#eaa19a"))
+	if site_type == "lighthouse":
+		# Life-vest makes the maritime rescue different from the village.
+		_box(visual,Vector3(0.0,1.18,0.30),Vector3(0.58,0.65,0.085),Color("#ee994f"))
+		_box(visual,Vector3(0.0,1.18,0.36),Vector3(0.09,0.59,0.035),Color("#e8e3a1"))
+	elif site_type == "helipad":
+		_box(visual,Vector3(0.0,1.50,0.29),Vector3(0.55,0.12,0.05),Color("#e8d77d"))
 	var joints: Dictionary = {}
 	for limb in ["left","right"]:
 		var sign := -1.0 if limb=="left" else 1.0
@@ -153,20 +171,39 @@ func _create_civilian(index: int) -> Dictionary:
 	joints["is_child"] = is_child
 	joints["is_elder"] = is_elder
 	joints["phase"] = "waiting"
+	joints["safe_at"] = -1.0
 	joints["height"] = 0.76 if is_child else 1.0
 	joints["previous_position"] = Vector3.ZERO
 	# Use the licensed humanoid model on a subset of adults. Children and
 	# elders retain distinct procedural silhouettes until suitable CC0 rigs exist.
-	if not is_child and not is_elder and index % 5 == 0:
+	if not is_child and not is_elder and index % 4 == 0:
 		var avatar := load("res://scripts/rigged_humanoid.gd").new() as Node3D
-		visual.add_child(avatar)
-		if bool(avatar.call("setup",1.03)):
-			for visual in person.get_children():
-				if visual != avatar and visual is Node3D:
-					(visual as Node3D).visible = false
+		# It must be a SIBLING of CivilianAppearance. Hiding its parent
+		# previously hid the licensed rig as well, so nothing appeared.
+		person.add_child(avatar)
+		if bool(avatar.call("setup",1.05)):
+			visual.visible = false
 			joints["avatar"] = avatar
+			# Independent visible accessory gives the civilian a distinct role.
+			var carry := Node3D.new()
+			carry.name = "PersonalEmergencyBag"
+			person.add_child(carry)
+			_box(carry,Vector3(0.0,0.95,-0.28),Vector3(0.39,0.53,0.20),COATS[(index+3)%COATS.size()])
+			joints["carry"] = carry
 		else:
 			avatar.queue_free()
+	var rescue_tag := Label3D.new()
+	rescue_tag.name = "RescueStatus"
+	person.add_child(rescue_tag)
+	rescue_tag.visible = false
+	rescue_tag.text = "EVACUATION"
+	rescue_tag.position = Vector3(0,2.54,0)
+	rescue_tag.font_size = 42
+	rescue_tag.pixel_size = 0.0038
+	rescue_tag.outline_size = 9
+	rescue_tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	rescue_tag.modulate = Color("#fff0aa")
+	joints["status_tag"] = rescue_tag
 	person.position = _waiting_position(index)
 	return joints
 
@@ -229,6 +266,7 @@ func sync(delta: float) -> void:
 			crossing[person_index] = moving
 	var started := int(mission.get("next_villager_index"))
 	var endangered := float(mission.get("flood_level")) > 0.34
+	var urgent := float(mission.get("flood_level")) > 0.74
 	count_away = crossing.size()
 	count_waiting = 0
 	count_safe = 0
@@ -250,14 +288,19 @@ func sync(delta: float) -> void:
 			walk = rig.position.distance_to(target)>0.18
 		else:
 			count_waiting += 1
+		var previous_phase := str(actor.get("phase","waiting"))
+		if phase == "crossing" and previous_phase != "crossing":
+			rescue_started[idx] = time
+		if phase == "safe" and previous_phase != "safe":
+			actor["safe_at"] = time
 		actor["phase"] = phase
 		actor["age"] = float(actor["age"])+d
 		var t := float(actor["age"])
-		var walking_speed := 7.25 if bool(actor["is_elder"]) else (9.0 if bool(actor["is_child"]) else 8.25)
+		var walking_speed := 4.8 if bool(actor["is_elder"]) else (6.2 if bool(actor["is_child"]) else 5.6)
 		var movement: Vector3 = rig.call("move_to",target,walking_speed if walk else 3.0,d)
 		if movement.length_squared()>0.00003 and walk:
 			rig.rotation.y = lerp_angle(rig.rotation.y,atan2(movement.x,movement.z),minf(1.0,d*5.0))
-		var pace := 7.0 if walk else 2.2
+		var pace := 7.8 if walk else 2.0
 		var swing := sin(t*pace+float(idx)*0.8)*(0.58 if walk else (0.25 if endangered and phase=="waiting" else 0.07))
 		(actor["left_arm"] as Node3D).rotation.x = swing
 		(actor["right_arm"] as Node3D).rotation.x = -swing
@@ -267,12 +310,33 @@ func sync(delta: float) -> void:
 			var avatar: Node3D = actor["avatar"]
 			if is_instance_valid(avatar):
 				avatar.call("animate",d,"walk" if walk else ("celebrate" if phase=="safe" else "idle"))
+		# Different body language: asking for help, walking to safety,
+		# and celebrating after reaching the real refuge.
 		if phase=="safe" and not walk:
-			(actor["right_arm"] as Node3D).rotation.z = 0.50+0.25*sin(t*4.3+float(idx))
+			(actor["right_arm"] as Node3D).rotation.z = 0.55+0.28*sin(t*3.7+float(idx))
+			(actor["left_arm"] as Node3D).rotation.z = -0.25
+		elif phase=="waiting" and endangered:
+			(actor["right_arm"] as Node3D).rotation.z = 0.42+0.31*sin(t*4.3+float(idx))
+			(actor["left_arm"] as Node3D).rotation.z = -0.12 if urgent else 0.0
 		else:
 			(actor["right_arm"] as Node3D).rotation.z = 0.0
+			(actor["left_arm"] as Node3D).rotation.z = 0.0
+		var rescue_tag: Label3D = actor["status_tag"]
+		var recent_arrival := phase=="safe" and (time-float(actor.get("safe_at",-100.0))) < 3.5
+		rescue_tag.visible = phase=="crossing" or recent_arrival
+		if rescue_tag.visible:
+			rescue_tag.text = "EN ROUTE" if phase=="crossing" else "SAUVE"
+			rescue_tag.modulate = Color("#ffe2a7") if phase=="crossing" else Color("#a9ffd5")
+			rescue_tag.position.y = 2.54+0.10*sin(t*3.0)
+		# Look toward the bridge or refuge even when standing still.
+		if phase=="waiting" and not walk:
+			rig.rotation.y = lerp_angle(rig.rotation.y,0.3+sin(t*0.45+float(idx))*0.16,minf(1.0,d*1.5))
 		var appearance: Node3D = actor["visual"]
-		appearance.position.y = 0.018*sin(t*pace) if walk else 0.008*sin(t*pace)
+		appearance.position.y = 0.021*sin(t*pace) if walk else 0.008*sin(t*pace)
+		if actor.has("avatar"):
+			var visible_avatar: Node3D = actor["avatar"]
+			if is_instance_valid(visible_avatar):
+				visible_avatar.position.y = appearance.position.y
 	if waiting_sign != null:
 		waiting_sign.text = "%d PERSONNES EN ATTENTE" % count_waiting
 	if safe_sign != null:
