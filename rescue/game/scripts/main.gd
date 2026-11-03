@@ -650,6 +650,11 @@ func _draw_emergency_card() -> void:
 	_rect(218,362,445*level,15,Color("#fa7e68") if warning else Color("#62c5cf"))
 	if str(state.get("status"))=="RUNNING" and int(state.get("weather_stage"))>0:
 		_text("TEMPETE %d/3" % int(state.get("weather_stage")),Vector2(505,347),17,Color("#ffb9ad"))
+	_rect(24,397,672,39,Color("#081e33da"))
+	if int(clock/6.0)%2 == 0:
+		_text("VOTE 1 : PILIERS   2 : GRUE   3 : EVACUATION",Vector2(40,425),17,Color("#a5f6de"))
+	else:
+		_text("CADEAUX : ROSE +4  •  DOUGHNUT +40  •  GALAXY +120",Vector2(40,425),17,Color("#ffdcac"))
 
 func _draw_bridge_detail() -> void:
 	var completion := float(state.get("progress"))/100.0

@@ -256,7 +256,8 @@ func tick(delta: float) -> void:
 	wood = minf(350.0,wood+d*0.32)
 	var duration := total_duration
 	flood_level = clampf(elapsed/maxf(1.0,total_duration),0.0,1.0)
-	if next_disaster < DISASTER_STAGES.size() and elapsed/duration >= DISASTER_STAGES[next_disaster]:
+	var stage_limits := [0.15, 0.32, 0.48] if demo_mode else DISASTER_STAGES
+	if next_disaster < stage_limits.size() and elapsed/duration >= stage_limits[next_disaster]:
 		var damage := 18.0+float(next_disaster)*9.0
 		if protection_seconds > 0:
 			damage *= 0.15
@@ -282,7 +283,8 @@ func tick(delta: float) -> void:
 		_finish(false)
 
 func _tick_demo() -> void:
-	if demo_clock >= 0.96:
+	var auto_interval := 1.25 if progress < 83.0 else 3.1
+	if demo_clock >= auto_interval:
 		demo_clock = 0.0
 		var stage := action_sequence % 7
 		if progress < 84.0:
