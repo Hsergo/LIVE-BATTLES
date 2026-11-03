@@ -4,6 +4,7 @@ extends Node2D
 ## Les seules interactions des spectateurs en LIVE viennent de la passerelle.
 
 const Mission = preload("res://scripts/mission.gd")
+const Agents = preload("res://scripts/agents.gd")
 const WIDTH := 720.0
 const HEIGHT := 1280.0
 const BRIDGE_LEFT := 188.0
@@ -11,6 +12,13 @@ const BRIDGE_RIGHT := 558.0
 const BRIDGE_Y := 692.0
 
 var state: RefCounted
+var agents: RefCounted
+var agent_message := ""
+var agent_message_life := 0.0
+var current_scenario := "bridge"
+var selected_provider := "tikfinity"
+var provider_picker: OptionButton
+var key_input: LineEdit
 var ws: WebSocketPeer = WebSocketPeer.new()
 var bridge_connected := false
 var status_tiktok := "PASSERELLE NON CONNECTEE"
@@ -48,6 +56,8 @@ func _ready() -> void:
 	randomize()
 	state = Mission.new()
 	state.call("configure",true)
+	agents = Agents.new()
+	current_scenario = str(state.call("scenario_info").get("id"))
 	last_progress = float(state.get("progress"))
 	last_strength = float(state.get("strength"))
 	for i in range(32):
@@ -87,6 +97,16 @@ func _process(delta: float) -> void:
 			helicopter_active = false
 	_poll_socket(d)
 	state.call("tick",d)
+	agent_message_life = maxf(0.0,agent_message_life-d)
+	if agents != null:
+		var suggestion: String = agents.call("tick",d,state,game_mode=="LIVE")
+		if not suggestion.is_empty() and agent_message_life <= 0.0:
+			_agent_show(suggestion)
+	var new_scene := str(state.call("scenario_info").get("id"))
+	if current_scenario != new_scene:
+		current_scenario = new_scene
+		agents.call("reset")
+		_agent_show("NOUVELLE MISSION : " + str(state.call("scenario_info").get("title")))
 	var progress := float(state.get("progress"))
 	var strength := float(state.get("strength"))
 	var rescued := int(state.get("saved"))
@@ -103,6 +123,10 @@ func _process(delta: float) -> void:
 			last_event = int(e.get("id",0))
 			var kind := str(e.get("kind",""))
 			_visual_event(e)
+			if agents != null:
+				var reaction: String = agents.call("reaction",e,state,game_mode=="LIVE")
+				if not reaction.is_empty() and agent_message_life <= 0.0:
+					_agent_show(reaction)
 			if music != null:
 				music.call("play_effect", kind)
 			if kind in ["gift","power"]:
@@ -126,7 +150,10 @@ func _poll_socket(d: float) -> void:
 		if not connected_before:
 			connected_before = true
 			if game_mode == "LIVE" and not saved_live_name.is_empty():
-				ws.send_text(JSON.stringify({"type":"control","action":"connect","username":saved_live_name}))
+				if selected_provider == "tikfinity":
+					ws.send_text(JSON.stringify({"type":"control","action":"connect","username":saved_live_name,"provider":selected_provider}))
+				else:
+					status_tiktok = "TIKTOOLS : RENSEIGNER LA CLE API A NOUVEAU"
 				status_tiktok = "RECONNEXION AUTOMATIQUE : @" + saved_live_name
 		bridge_connected = true
 		reconnect = 4.0
@@ -160,9 +187,18 @@ func _handle_packet(raw: String) -> void:
 		return
 	match str(packet.get("event","")):
 		"chat":
-			state.call("receive",user,str(packet.get("text","")))
+			var message := str(packet.get("text",""))
+			if not state.get("participants").has(user):
+				# Une vraie action gratuite inscrit son auteur automatiquement.
+				state.call("join",user)
+				_agent_show(str(agents.call("welcome",user,state)))
+			state.call("receive",user,message)
 		"gift":
-			state.call("gift",user,str(packet.get("gift_name","")),int(packet.get("count",1)))
+			if bool(state.call("gift",user,str(packet.get("gift_name","")),int(packet.get("count",1)))):
+				_agent_show(str(agents.call("reaction",{"kind":"gift","user":user},state,true)))
+		"follow","share":
+			if agent_message_life <= 0.0:
+				_agent_show("MERCI @" + user + " ! LE CHANTIER EST OUVERT : !join")
 		"like":
 			# Les likes soutiennent la popularite du LIVE, pas un achat force.
 			pass
@@ -172,12 +208,14 @@ func _switch_mode() -> void:
 		game_mode = "LIVE"
 		live_auto_hide = false
 		state.call("configure",false)
+		agents.call("reset")
 		banner = "MODE LIVE : AUCUN JOUEUR FICTIF"
 		banner_life = 3.0
 	else:
 		game_mode = "DEMO"
 		admin_visible = true
 		state.call("configure",true)
+		agents.call("reset")
 		saved_live_name = ""
 		if ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
 			ws.send_text(JSON.stringify({"type":"control","action":"disconnect"}))
@@ -198,8 +236,14 @@ func _connect_tiktok() -> void:
 		return
 	saved_live_name = name
 	_save_preferences(true)
-	ws.send_text(JSON.stringify({"type":"control","action":"connect","username":name}))
-	status_tiktok = "CONNEXION DEMANDEE : @" + name
+	selected_provider = "tiktools" if provider_picker.selected == 1 else "tikfinity"
+	_save_preferences(true)
+	ws.send_text(JSON.stringify({
+		"type":"control","action":"connect","username":name,
+		"provider":selected_provider,
+		"apiKey":key_input.text if selected_provider == "tiktools" else ""
+	}))
+	status_tiktok = "CONNEXION " + selected_provider.to_upper() + " DEMANDEE"
 
 func _admin_command(command: String) -> void:
 	if game_mode != "DEMO":
@@ -237,8 +281,8 @@ func _build_controls() -> void:
 	layer.add_child(canvas)
 	canvas.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var panel := PanelContainer.new()
-	panel.position = Vector2(14,1058)
-	panel.size = Vector2(692,208)
+	panel.position = Vector2(14,1007)
+	panel.size = Vector2(692,260)
 	canvas.add_child(panel)
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color("#061628f4")
@@ -267,6 +311,28 @@ func _build_controls() -> void:
 	live_name.add_theme_font_size_override("font_size",19)
 	second.add_child(live_name)
 	_make_btn(second,"CONNECTER LIVE",165,_connect_tiktok,Color("#c24b74"))
+	var provider_row := HBoxContainer.new()
+	provider_row.add_theme_constant_override("separation",8)
+	stack.add_child(provider_row)
+	provider_picker = OptionButton.new()
+	provider_picker.add_item("TikFinity Desktop",0)
+	provider_picker.add_item("TikTools API",1)
+	provider_picker.select(0)
+	provider_picker.custom_minimum_size = Vector2(210,42)
+	provider_picker.add_theme_font_size_override("font_size",16)
+	provider_row.add_child(provider_picker)
+	key_input = LineEdit.new()
+	key_input.placeholder_text = "Cle TikTools (seulement si necessaire)"
+	key_input.secret = true
+	key_input.custom_minimum_size = Vector2(410,42)
+	key_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	key_input.add_theme_font_size_override("font_size",15)
+	provider_row.add_child(key_input)
+	provider_picker.item_selected.connect(func(index: int):
+		selected_provider = "tiktools" if index == 1 else "tikfinity"
+		key_input.visible = index == 1
+	)
+	key_input.visible = false
 	status_label = Label.new()
 	status_label.text = "SIMULATION AUTONOME • CHANGE EN LIVE POUR RECEVOIR LES COMMENTAIRES"
 	status_label.add_theme_font_size_override("font_size",14)
@@ -338,6 +404,7 @@ func _draw() -> void:
 	_draw_header()
 	_draw_scene_legend()
 	_draw_emergency_card()
+	_draw_agent_message()
 	_draw_footer()
 	if banner_life > 0:
 		_rect(50,861,620,71,Color("#0a213de8"))
@@ -367,7 +434,7 @@ func _draw_header() -> void:
 	var badge_color := Color("#147c64") if connected_live else (Color("#b65d3c") if game_mode == "LIVE" else Color("#256e6e"))
 	_rect(574,29,100,31,badge_color)
 	_text(badge,Vector2(582,51),16,Color.WHITE,true,84)
-	_text("PONT DE LA DERNIERE CHANCE   /   MISSION %02d" % int(state.get("mission_index")),Vector2(30,102),20,Color("#9ac9d7"))
+	_text((str(state.call("scenario_info").get("title")) + " / MISSION %02d" % int(state.get("mission_index"))).substr(0,52),Vector2(30,102),19,Color("#9ac9d7"))
 	var seconds := int(ceil(float(state.get("seconds"))))
 	_text("%02d:%02d" % [seconds/60,seconds%60],Vector2(520,113),43,Color("#ffd080"))
 	_text("AVANT LA CRUE",Vector2(532,138),14,Color("#f5cba6"))
@@ -378,7 +445,7 @@ func _draw_header() -> void:
 	_text("CONSTRUCTION  %d%%" % int(state.get("progress")),Vector2(30,224),19,Color("#9ee6e6"))
 	_rect(273,211,168,12,Color("#233c50"))
 	_rect(273,211,168*float(state.get("progress"))/100.0,12,Color("#ffa95a"))
-	_text("PONT  %d%%" % int(state.get("strength")),Vector2(457,224),19,Color("#bfe4ff"))
+	_text(str(state.call("scenario_info").get("site")) + " %d%%" % int(state.get("strength")),Vector2(457,224),19,Color("#bfe4ff"))
 	_rect(585,211,107,12,Color("#233c50"))
 	_rect(585,211,107*float(state.get("strength"))/100.0,12,Color("#64c4ed"))
 
@@ -566,7 +633,7 @@ func _draw_footer() -> void:
 	var seconds := int(ceil(float(state.get("seconds"))))
 	var urgent := seconds <= 32 and str(state.get("status"))=="RUNNING"
 	_text("DERNIERES SECONDES ! AGIS !" if urgent else "SAUVEZ LE VILLAGE ENSEMBLE !",Vector2(26,1001),26,Color("#ffba93") if urgent else Color("#fff1c6"))
-	_text("MATERIAUX  %d" % int(state.get("wood")),Vector2(26,1040),19,Color("#b5f0d6"))
+	_text(str(state.call("scenario_info").get("material")) + "  %d" % int(state.get("wood")),Vector2(26,1040),19,Color("#b5f0d6"))
 	var rank: Array[String] = state.call("ranking",2)
 	if not rank.is_empty():
 		_text("TOP  " + "   /   ".join(rank),Vector2(242,1040),17,Color("#cff7ec"),false,450)
@@ -704,6 +771,11 @@ func _load_preferences() -> void:
 	if name.is_empty():
 		return
 	live_name.text = name
+	selected_provider = str(config.get_value("startup","provider","tikfinity"))
+	if selected_provider not in ["tikfinity","tiktools"]:
+		selected_provider = "tikfinity"
+	provider_picker.select(1 if selected_provider == "tiktools" else 0)
+	key_input.visible = selected_provider == "tiktools"
 	if bool(config.get_value("startup","auto_live",false)):
 		saved_live_name = name
 		if game_mode != "LIVE":
@@ -715,4 +787,19 @@ func _save_preferences(auto_live: bool) -> void:
 	var config := ConfigFile.new()
 	config.set_value("startup","tiktok_username",live_name.text.strip_edges().trim_prefix("@"))
 	config.set_value("startup","auto_live",auto_live)
+	config.set_value("startup","provider",selected_provider)
 	config.save("user://mission_settings.cfg")
+
+func _agent_show(message: String) -> void:
+	if message.strip_edges().is_empty():
+		return
+	agent_message = message.substr(0,105)
+	agent_message_life = 6.5
+
+func _draw_agent_message() -> void:
+	if agent_message_life <= 0.0:
+		return
+	_rect(26,449,668,54,Color("#08243be9"))
+	_rect(26,449,6,54,Color("#6ae6c6"))
+	_text("ASSISTANTS DU JEU",Vector2(43,470),13,Color("#a6d5e0"))
+	_text(agent_message,Vector2(43,491),18,Color("#fff0bb"),false,636)
