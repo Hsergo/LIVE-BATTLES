@@ -142,7 +142,8 @@ func _process(delta: float) -> void:
 	if strength < last_strength - 8.0:
 		flash = 0.6
 	if rescued > last_saved:
-		banner = "UN HABITANT SAUVE !"
+		var site := str(state.call("scenario_info").get("site_type"))
+		banner = "UN NAVIRE GUIDE A BON PORT !" if site=="lighthouse" else "UN VILLAGEOIS A REJOINT LE REFUGE !"
 		banner_life = 2.2
 	if state.get("events").size() > 0:
 		var events: Array = state.get("events")
@@ -962,10 +963,11 @@ func _draw_3d_leaderboards() -> void:
 	var audience: int = int(state.get("participants").size())
 	var shown: int = int(world_3d.call("visible_workers")) if world_3d != null else 0
 	var people_safe: int = int(state.get("saved"))
-	var civilians: int = int(world_3d.call("visible_civilians")) if world_3d != null else 0
+	var on_way: int = int(world_3d.call("crossing_civilians")) if world_3d != null else 0
+	var waiting: int = maxi(0,int(state.get("target"))-people_safe-on_way)
 	_rect(18,1058,684,119,Color("#071b2ad8"))
 	_rect(18,1058,684,3,Color("#badebe"))
-	_text("%d JOUEURS • %d OUVRIERS • %d VILLAGEOIS • %d SAUVES" % [audience,shown,civilians,people_safe],
+	_text("%d JOUEURS • %d OUVRIERS  |  %d ATTENDENT • %d EN ROUTE • %d SAUVES" % [audience,shown,waiting,on_way,people_safe],
 		Vector2(32,1083),15,Color("#ecf8ec"))
 	var builders: Array[String] = state.call("top_builders",2)
 	var donors: Array[String] = state.call("top_donors",2)
