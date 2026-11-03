@@ -27,6 +27,7 @@ var clock := 0.0
 var orbit_angle := -0.6
 var orbit_enabled := true
 var spotlight_time := 0.0
+var rescue_focus_time := 0.0
 var source_mission := ""
 var surprise_time := 0.0
 var dust: Array[MeshInstance3D] = []
@@ -368,14 +369,26 @@ func _worker(name: String) -> Dictionary:
 	var u_hash := absi(name.hash())
 	var skin_color: Color = SKIN[u_hash % SKIN.size()]
 	var uniform: Color = UNIFORMS[u_hash % UNIFORMS.size()]
+	var helmet_color := Color("#ffcb51") if u_hash % 3 == 0 else (Color("#edebdf") if u_hash % 3 == 1 else Color("#eaa54d"))
+	rig.scale = Vector3(0.94+float(u_hash%5)*0.02,0.95+float((u_hash/5)%5)*0.021,1.0)
 	# Safety boots, trousers, detailed vest, independent articulated arms and legs.
 	_box(rig,Vector3(0,1.02,0),Vector3(0.62,0.84,0.40),uniform)
 	_box(rig,Vector3(0,1.25,0.22),Vector3(0.58,0.09,0.055),Color("#fbe5a1"))
 	_box(rig,Vector3(0,0.84,0.22),Vector3(0.58,0.07,0.055),Color("#fbe5a1"))
+	# Reflective safety vest, chest zipper, utility belt and radio badge.
+	_box(rig,Vector3(0,1.03,0.232),Vector3(0.04,0.67,0.04),Color("#efe8c5"))
+	_box(rig,Vector3(0,0.65,0),Vector3(0.68,0.17,0.47),Color("#56483c"))
+	_box(rig,Vector3(-0.19,0.65,0.266),Vector3(0.22,0.18,0.13),Color("#96795a"))
+	_box(rig,Vector3(0.21,1.28,0.258),Vector3(0.15,0.12,0.045),Color("#f7efe1"))
 	_box(rig,Vector3(0,1.65,0),Vector3(0.24,0.26,0.25),skin_color)
 	_ball(rig,Vector3(0,1.89,0),0.30,skin_color)
-	_cylinder(rig,Vector3(0,2.13,0),0.34,0.23,Color("#f9d05c"))
-	_box(rig,Vector3(0,2.01,0.20),Vector3(0.71,0.08,0.26),Color("#f7d05b"))
+	_cylinder(rig,Vector3(0,2.13,0),0.34,0.23,helmet_color)
+	_box(rig,Vector3(0,2.01,0.20),Vector3(0.71,0.08,0.26),helmet_color)
+	_box(rig,Vector3(0,2.22,0.0),Vector3(0.15,0.055,0.51),helmet_color.lightened(0.2))
+	# Chin strap and facial features for a less toy-like worker silhouette.
+	_box(rig,Vector3(0,1.69,0.0),Vector3(0.038,0.12,0.41),Color("#575551"))
+	_ball(rig,Vector3(0,1.87,0.285),0.045,skin_color.darkened(0.1))
+	_box(rig,Vector3(0,1.765,0.286),Vector3(0.12,0.028,0.028),Color("#85544a"))
 	for side in [-1.0,1.0]:
 		_ball(rig,Vector3(side*0.10,1.91,0.275),0.034,Color("#273b4b"))
 	var limbs: Dictionary = {}
@@ -385,7 +398,23 @@ func _worker(name: String) -> Dictionary:
 		rig.add_child(arm)
 		arm.position = Vector3(factor*0.39,1.40,0)
 		_box(arm,Vector3(factor*0.045,-0.31,0),Vector3(0.21,0.67,0.25),uniform.darkened(0.1))
-		_ball(arm,Vector3(factor*0.045,-0.67,0),0.115,skin_color)
+		_ball(arm,Vector3(factor*0.045,-0.67,0),0.115,Color("#d5bd90"))
+		_box(arm,Vector3(factor*0.045,-0.48,0.14),Vector3(0.19,0.085,0.07),Color("#d9d9ca"))
+		if side == "right":
+			var hand_tool := Node3D.new()
+			arm.add_child(hand_tool)
+			hand_tool.position = Vector3(factor*0.045,-0.76,0.2)
+			_cylinder(hand_tool,Vector3(0,-0.22,0),0.041,0.63,Color("#7c5f45"))
+			if u_hash%3 == 0:
+				_box(hand_tool,Vector3(0,-0.52,0),Vector3(0.34,0.13,0.12),Color("#9eafb0"))
+			elif u_hash%3 == 1:
+				_box(hand_tool,Vector3(0,-0.49,0),Vector3(0.20,0.17,0.17),Color("#adb9bd"))
+				_box(hand_tool,Vector3(0.09,-0.39,0),Vector3(0.08,0.11,0.10),Color("#c5cbca"))
+			else:
+				_box(hand_tool,Vector3(0,-0.49,0),Vector3(0.32,0.09,0.10),Color("#b6bab3"))
+				_box(hand_tool,Vector3(0.13,-0.45,0),Vector3(0.08,0.17,0.11),Color("#a2b5b8"))
+			hand_tool.visible = false
+			limbs["tool"] = hand_tool
 		limbs[side+"_arm"] = arm
 		var leg := Node3D.new()
 		rig.add_child(leg)
@@ -504,8 +533,9 @@ func record_event(event: Dictionary) -> void:
 			contribution_text = "ACTION SPECIALE !"
 	action_tag.text = contribution_text
 	actor["last_used"] = clock
-	focus_user = name
-	spotlight_time = 3.5 if kind != "join" else 1.5
+	if spotlight_time <= 0.4 or kind == "rescue":
+		focus_user = name
+		spotlight_time = 3.5 if kind != "join" else 1.5
 	if recent_actions.size() >= 18:
 		recent_actions.pop_front()
 	recent_actions.append({"user":name,"kind":kind,"at":clock})
@@ -522,6 +552,10 @@ func _animate_workers(delta: float) -> void:
 		var t := float(actor["age"])
 		var remaining := maxf(0,float(actor["action_time"])-delta)
 		actor["action_time"] = remaining
+		var tool: Node3D = actor["tool"]
+		tool.visible = remaining > 0.0 and str(actor["action"]) in ["build","repair"]
+		var nametag: Label3D = actor["label"]
+		nametag.visible = actors.size() <= 18 or remaining > 0.0 or user == focus_user
 		var action_tag: Label3D = actor["action_tag"]
 		action_tag.visible = remaining > 0.0 and str(actor["action"]) != "join"
 		if action_tag.visible:
@@ -539,7 +573,8 @@ func _animate_workers(delta: float) -> void:
 		rig.position = rig.position.lerp(target,minf(1.0,delta*2.9))
 		rig.position.y += sin(t*7.2)*0.003 if remaining>0 else sin(t*1.3)*0.001
 		var fighting := remaining > 0.0
-		var swing := sin(t*(11.0 if fighting else 2.0))*(0.93 if fighting else 0.10)
+		var walking := rig.position.distance_to(target) > 0.35
+		var swing := sin(t*(10.0 if fighting else (7.0 if walking else 2.0)))*(0.92 if fighting else (0.47 if walking else 0.07))
 		(actor["left_arm"] as Node3D).rotation.x = swing
 		(actor["right_arm"] as Node3D).rotation.x = -swing*0.8
 		(actor["left_leg"] as Node3D).rotation.x = -swing*0.35
@@ -570,6 +605,11 @@ func _process(delta: float) -> void:
 	if name != source_mission:
 		_rebuild_world()
 	spotlight_time = maxf(0.0,spotlight_time-d)
+	rescue_focus_time = maxf(0.0,rescue_focus_time-d)
+	var saved_count := int(state.get("saved"))
+	if saved_count > last_saved:
+		rescue_focus_time = 2.6
+		last_saved = saved_count
 	surprise_time = maxf(0.0,surprise_time-d)
 	if orbit_enabled:
 		orbit_angle = fposmod(orbit_angle+d*TAU/39.0,TAU)
@@ -582,6 +622,10 @@ func _process(delta: float) -> void:
 			# Close-up in which the real author's visible worker performs the action.
 			target = target.lerp(focus.position+Vector3(0,1.0,0),0.55)
 			desired = desired.lerp(focus.position+Vector3(10,6.8,13),0.32)
+	if rescue_focus_time > 0.0 and civilians != null and is_instance_valid(civilians):
+		var rescue_pos: Vector3 = civilians.call("last_rescued_position")
+		target = target.lerp(rescue_pos+Vector3(0,1.5,0),0.56)
+		desired = desired.lerp(rescue_pos+Vector3(6.8,5.9,10.0),0.35)
 	camera.position = camera.position.lerp(desired,minf(1.0,d*1.25))
 	camera.look_at(target,Vector3.UP)
 	if water != null:
