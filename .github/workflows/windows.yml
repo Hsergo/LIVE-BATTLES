@@ -90,9 +90,14 @@ jobs:
             $exe = Join-Path $PWD 'dist/game/LiveBattle.exe'
             $log = Join-Path $PWD 'runtime-smoke.log'
             $game = Start-Process -FilePath $exe -ArgumentList @('--headless', '--quit-after', '120', '--log-file', $log) -Wait -PassThru
+            Write-Host "Code de retour du jeu : $($game.ExitCode)"
+            if (Test-Path $log) {
+              Write-Host '========= DEBUT DU JOURNAL GODOT ========='
+              Get-Content $log | Select-Object -Last 160
+              Write-Host '========== FIN DU JOURNAL GODOT =========='
+            }
             if ($game.ExitCode -ne 0) { throw "Le jeu exporte a quitte avec le code $($game.ExitCode)" }
             if (Test-Path $log) {
-              Get-Content $log | Select-Object -Last 80
               if (Select-String -Path $log -Pattern 'SCRIPT ERROR|Parse Error|Invalid call' -Quiet) {
                 throw 'Erreurs Godot detectees au demarrage'
               }
