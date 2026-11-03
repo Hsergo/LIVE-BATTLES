@@ -104,12 +104,12 @@ func _create_civilian(index: int) -> Dictionary:
 	var person: CharacterBody3D = load("res://scripts/character_motor_3d.gd").new()
 	person.name = "Villager_%02d" % index
 	add_child(person)
-	person.call("configure",2,0.225,1.44)
 	var visual := Node3D.new()
 	visual.name = "CivilianAppearance"
 	person.add_child(visual)
 	var is_child := index%6 == 2
 	var is_elder := index%7 == 4
+	person.call("configure",2,0.185 if is_child else 0.22,1.13 if is_child else 1.44)
 	visual.scale = Vector3.ONE * (0.72 if is_child else (0.91 if is_elder else 0.99+float(index%3)*0.035))
 	var skin: Color = SKIN[(index*7+2)%SKIN.size()]
 	var outfit: Color = COATS[(index*5+1)%COATS.size()]
@@ -150,6 +150,8 @@ func _create_civilian(index: int) -> Dictionary:
 	joints["visual"] = visual
 	joints["id"] = index
 	joints["age"] = 0.0
+	joints["is_child"] = is_child
+	joints["is_elder"] = is_elder
 	joints["phase"] = "waiting"
 	joints["height"] = 0.76 if is_child else 1.0
 	joints["previous_position"] = Vector3.ZERO
@@ -251,7 +253,8 @@ func sync(delta: float) -> void:
 		actor["phase"] = phase
 		actor["age"] = float(actor["age"])+d
 		var t := float(actor["age"])
-		var movement: Vector3 = rig.call("move_to",target,8.0 if walk else 3.3,d)
+		var walking_speed := 7.25 if bool(actor["is_elder"]) else (9.0 if bool(actor["is_child"]) else 8.25)
+		var movement: Vector3 = rig.call("move_to",target,walking_speed if walk else 3.0,d)
 		if movement.length_squared()>0.00003 and walk:
 			rig.rotation.y = lerp_angle(rig.rotation.y,atan2(movement.x,movement.z),minf(1.0,d*5.0))
 		var pace := 7.0 if walk else 2.2

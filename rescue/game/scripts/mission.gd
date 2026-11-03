@@ -362,7 +362,7 @@ func tick(delta: float) -> void:
 		_tick_demo()
 	if rescue_queue > 0 and crossings.size() < 4 and progress >= 99.9 and strength >= 20.0:
 		rescue_queue -= 1
-		crossings.append({"p":0.0,"speed":0.245+randf_range(-0.025,0.025),
+		crossings.append({"p":0.0,"speed":0.16+randf_range(-0.013,0.013),
 			"lane":randi_range(0,2),"person_index":next_villager_index})
 		next_villager_index += 1
 	for crossing in crossings.duplicate():
