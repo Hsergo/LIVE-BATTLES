@@ -1,6 +1,6 @@
 extends Node3D
 
-const ROUND_DURATION: float = 90.0
+const ROUND_DURATION: float = 60.0
 const SOCKET_URL := "ws://127.0.0.1:8765"
 
 var red_hp: float = 100.0
@@ -33,6 +33,19 @@ var combat_director: Node3D
 var confirmed_hits := 0
 var confirmed_parries := 0
 var confirmed_knockouts := 0
+var souls_bank: Dictionary = {"red": 0, "blue": 0}
+var souls_earned: Dictionary = {"red": 0, "blue": 0}
+var souls_pending: Dictionary = {}
+var match_started := false
+var match_number := 1
+var completed_rounds := 0
+var final_message := ""
+var souls_ui: Label
+var gift_guide_ui: Label
+var result_panel: PanelContainer
+var result_ui: Label
+var main_camera: Camera3D
+var camera_clock := 0.0
 var wins_red := 0
 var wins_blue := 0
 var match_finished := false
@@ -51,6 +64,7 @@ func _ready() -> void:
 	combat_director.connect("battle_notice", _log)
 	combat_director.connect("physics_telemetry", _on_physics_telemetry)
 	combat_director.call("setup", arena_live, fighters)
+	combat_director.call("sync_players", players, contributions)
 	_build_hud()
 	_connect_bridge()
 	_log("Bienvenue dans LIVE BATTLES !")
@@ -100,9 +114,10 @@ func _fighter(pos: Vector3, color: Color) -> Node3D:
 func _build_scene() -> void:
 	var camera := Camera3D.new()
 	add_child(camera)
-	camera.position = Vector3(0, 7.2, 12.5)
-	camera.look_at(Vector3(0, 1.25, 0))
-	camera.fov = 57.0
+	main_camera = camera
+	camera.position = Vector3(0, 7.4, 20.2)
+	camera.look_at(Vector3(0, 1.05, 0))
+	camera.fov = 68.0
 	camera.current = true
 	var sunlight := DirectionalLight3D.new()
 	add_child(sunlight)
@@ -146,7 +161,7 @@ func _panel(parent: Control, top: bool) -> VBoxContainer:
 	panel.offset_right = -12
 	if top:
 		panel.offset_top = 12
-		panel.offset_bottom = 225
+		panel.offset_bottom = 290
 	else:
 		panel.offset_top = -405
 		panel.offset_bottom = -12
@@ -178,8 +193,12 @@ func _build_hud() -> void:
 	top.add_child(round_ui)
 	status_ui = _text("MODE SIMULATION", 15)
 	top.add_child(status_ui)
-	recruitment_ui = _text("Rejoins le combat : !join red ou !join blue", 17)
+	recruitment_ui = _text("Entre dans l'arene : !join red / !join blue", 17)
 	top.add_child(recruitment_ui)
+	souls_ui = _text("", 21)
+	top.add_child(souls_ui)
+	gift_guide_ui = _text("ROSE +1 | FINGER HEART +6 | DOUGHNUT +35 | GALAXY +150", 15)
+	top.add_child(gift_guide_ui)
 	var bottom := _panel(root, false)
 	log_ui = _text("", 19)
 	bottom.add_child(log_ui)
@@ -220,6 +239,21 @@ func _build_hud() -> void:
 	test_panel.add_child(row4)
 	_button(row4, "SOINS ROUGE", func(): _action("DemoRouge", "!heal"))
 	_button(row4, "SOINS BLEU", func(): _action("DemoBleu", "!heal"))
+	result_panel = PanelContainer.new()
+	root.add_child(result_panel)
+	result_panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+	result_panel.offset_left = -320
+	result_panel.offset_right = 320
+	result_panel.offset_top = -120
+	result_panel.offset_bottom = 120
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.04, 0.07, 0.16, 0.95)
+	style.set_corner_radius_all(22)
+	style.set_content_margin_all(20)
+	result_panel.add_theme_stylebox_override("panel", style)
+	result_ui = _text("", 31)
+	result_panel.add_child(result_ui)
+	result_panel.visible = false
 
 func _connect_bridge() -> void:
 	socket = WebSocketPeer.new()
@@ -241,14 +275,27 @@ func _process(delta: float) -> void:
 		if retry_in <= 0:
 			retry_in = 4.0
 			_connect_bridge()
-	if intermission > 0:
+	camera_clock += delta
+	if main_camera != null:
+		var ease := minf(1.0, delta * 1.7)
+		main_camera.position = main_camera.position.lerp(
+			Vector3(sin(camera_clock * 0.34) * 0.33, 7.4 + sin(camera_clock * 0.26) * 0.12, 20.2),
+			ease
+		)
+		main_camera.look_at(Vector3(0, 1.05, 0))
+	if match_finished:
 		intermission -= delta
 		if intermission <= 0:
 			_next_round()
-	else:
-		round_time -= delta
-		if round_time <= 0 or red_hp <= 0 or blue_hp <= 0:
-			_end_round()
+	elif match_started:
+		if intermission > 0:
+			intermission -= delta
+			if intermission <= 0:
+				_next_round()
+		else:
+			round_time -= delta
+			if round_time <= 0 or red_hp <= 0 or blue_hp <= 0:
+				_end_round()
 	_update_hud()
 
 func _members(team: String) -> int:
@@ -275,57 +322,93 @@ func _damage(team: String, damage: float) -> void:
 		arena_live.call("set_health", team, red_hp if team == "red" else blue_hp)
 
 func _end_round() -> void:
-	if intermission > 0:
+	if not match_started or intermission > 0 or match_finished:
 		return
-	intermission = 4.0
 	combat_director.call("pause_round", true)
+	completed_rounds += 1
+	var round_winner := "EGALITE"
 	if red_hp > blue_hp:
 		wins_red += 1
 		score_red += 10
-		_log("MANCHE GAGNEE : ROUGES !")
+		round_winner = "ROUGE"
 	elif blue_hp > red_hp:
 		wins_blue += 1
 		score_blue += 10
-		_log("MANCHE GAGNEE : BLEUS !")
-	else:
-		_log("MATCH NUL")
-	if wins_red >= 3 or wins_blue >= 3:
+		round_winner = "BLEU"
+	_log("FIN MANCHE %d/3 : %s" % [round_number, round_winner])
+	if completed_rounds >= 3:
 		match_finished = true
-		intermission = 8.0
-		_log("BATAILLE TERMINEE ! VAINQUEURS : " + ("ROUGES" if wins_red >= 3 else "BLEUS"))
+		intermission = 11.0
+		var winner := "ROUGE" if wins_red > wins_blue else ("BLEU" if wins_blue > wins_red else "EGALITE")
+		final_message = "MATCH %d TERMINE !\n%s\nMANCHES %d - %d\nNOUVEAU MATCH DANS 11 s" % [
+			match_number, "VICTOIRE " + winner if winner != "EGALITE" else "EGALITE !", wins_red, wins_blue
+		]
+		result_panel.visible = true
+		result_ui.text = final_message
+		_log("VICTOIRE " + winner + " • MATCH TERMINE")
+	else:
+		intermission = 4.0
+
 func _next_round() -> void:
 	if match_finished:
+		match_number += 1
+		match_finished = false
+		completed_rounds = 0
+		round_number = 1
 		wins_red = 0
 		wins_blue = 0
 		score_red = 0
 		score_blue = 0
 		contributions.clear()
 		cooldown.clear()
-		match_finished = false
+		souls_earned = {"red": 0, "blue": 0}
+		combat_director.call("reset_match_stats")
+		combat_director.call("sync_players", players, contributions)
 		arena_live.call("update_players", players, contributions)
+		result_panel.visible = false
+	else:
+		round_number += 1
 	red_hp = 100.0
 	blue_hp = 100.0
-	red_shield = 0
-	blue_shield = 0
+	red_shield = 0.0
+	blue_shield = 0.0
 	round_time = ROUND_DURATION
-	combat_tick = 0
-	intermission = 0
-	round_number += 1
+	combat_tick = 0.0
+	intermission = 0.0
+	match_started = _members("red") > 0 and _members("blue") > 0
 	arena_live.call("set_health", "red", 100.0)
 	arena_live.call("set_health", "blue", 100.0)
 	combat_director.call("restart_round")
-	_log("Nouvelle manche : COMBAT PHYSIQUE !")
+	if not match_started:
+		combat_director.call("pause_round", true)
+		_log("EN ATTENTE : UN JOUEUR PAR EQUIPE")
+	else:
+		_log("MATCH %d • MANCHE %d/3 : COMBAT !" % [match_number, round_number])
+		_apply_soul_power("red")
+		_apply_soul_power("blue")
+
 func _join(user: String, team: String) -> void:
-	if team != "red" and team != "blue":
+	if team != "red" and team != "blue" or user.is_empty():
 		return
 	if players.has(user):
 		if str(players[user]) != team:
-			_log(user + " est deja dans une autre equipe")
+			_log("@" + user + " est deja dans une equipe")
 		return
 	players[user] = team
 	arena_live.call("update_players", players, contributions)
-	arena_live.call("reaction", team, "join")
-	_log(user + " entre dans l'arene " + team.to_upper() + " !")
+	combat_director.call("sync_players", players, contributions)
+	_log("@" + user + " rejoint " + team.to_upper())
+	if souls_pending.has(user):
+		var amount := int(souls_pending.get(user, 0))
+		souls_pending.erase(user)
+		_credit_souls(user, team, amount, "CADEAU EN ATTENTE")
+	if not match_started and not match_finished and _members("red") > 0 and _members("blue") > 0:
+		match_started = true
+		combat_director.call("pause_round", false)
+		_log("BATAILLE LANCEE : MANCHE %d/3 !" % round_number)
+		_apply_soul_power("red")
+		_apply_soul_power("blue")
+
 func _add_points(user: String, team: String, amount: int) -> void:
 	if team == "red":
 		score_red += amount
@@ -334,8 +417,12 @@ func _add_points(user: String, team: String, amount: int) -> void:
 	contributions[user] = int(contributions.get(user, 0)) + amount
 	if arena_live != null:
 		arena_live.call("update_players", players, contributions)
+	if combat_director != null:
+		combat_director.call("sync_players", players, contributions)
 
 func _action(user: String, command: String) -> void:
+	if not match_started or match_finished or intermission > 0:
+		return
 	var team: String = str(players.get(user, ""))
 	if team == "":
 		_log(user + " doit d'abord rejoindre une equipe")
@@ -369,14 +456,14 @@ func _action(user: String, command: String) -> void:
 			_log(user + " soigne ses combattants !")
 
 func _gift(user: String, points: int, gift_name: String) -> void:
+	var amount := clampi(points, 0, 3000)
+	if amount <= 0:
+		return
 	if not players.has(user):
-		_join(user, "red" if _members("red") <= _members("blue") else "blue")
-	var team: String = str(players[user])
-	var safe_points := clampi(points, 1, 1000)
-	_add_points(user, team, safe_points)
-	# Le cadeau renforce l'armee; il ne retire pas magiquement des PV.
-	combat_director.call("gift_power", team, safe_points)
-	_log(user + " BOOSTE " + team.to_upper() + " : " + gift_name)
+		souls_pending[user] = mini(5000, int(souls_pending.get(user, 0)) + amount)
+		_log("@" + user + " : " + str(amount) + " AMES EN ATTENTE • !join red / !join blue")
+		return
+	_credit_souls(user, str(players[user]), amount, gift_name)
 
 func _chat(user: String, message: String) -> void:
 	var text := message.strip_edges().to_lower()
@@ -429,28 +516,75 @@ func _request_tiktok() -> void:
 	_log("Connexion demandee : @" + user)
 
 func _update_hud() -> void:
-	score_ui.text = "MANCHES  ROUGE %d  -  %d BLEU" % [wins_red, wins_blue]
-	health_ui.text = "CRISTAUX  %d PV  |  %d PV" % [int(red_hp), int(blue_hp)]
-	round_ui.text = "MANCHE %d | %02d s | %d ROUGES / %d BLEUS" % [round_number, int(maxf(0, round_time)), _members("red"), _members("blue")]
-	status_ui.text = bridge_state if connected else "AUTONOME • BOTS ACTIFS"
-	recruitment_ui.text = "!join red / !join blue • !attack • !defend • !heal"
+	score_ui.text = "MATCH %d  |  ROUGE %d - %d BLEU" % [match_number, wins_red, wins_blue]
+	health_ui.text = "CRISTAUX   %d PV  /  %d PV" % [int(red_hp), int(blue_hp)]
+	round_ui.text = "MANCHE %d/3  •  %02d s  •  %d ROUGES / %d BLEUS" % [
+		round_number, int(maxf(0, round_time)), _members("red"), _members("blue")
+	]
+	if not match_started:
+		status_ui.text = "EN ATTENTE DE 2 EQUIPES • PAS DE BOTS"
+	elif match_finished:
+		status_ui.text = "MATCH TERMINE • PROCHAIN DANS %d s" % int(ceil(intermission))
+	elif intermission > 0:
+		status_ui.text = "PAUSE AVANT PROCHAINE MANCHE : %d s" % int(ceil(intermission))
+	else:
+		status_ui.text = bridge_state if connected else "COMBAT AUTONOME • JOUEURS REELS"
+	recruitment_ui.text = "!join red  /  !join blue  •  !attack  •  !defend  •  !heal"
+	souls_ui.text = "AMES   ROUGE %d  |  BLEU %d  •  POUVOIRS 10 / 35 / 120" % [
+		int(souls_bank["red"]), int(souls_bank["blue"])
+	]
 	var people: Array = contributions.keys()
 	people.sort_custom(func(a, b): return int(contributions[a]) > int(contributions[b]))
 	var leaders := PackedStringArray()
 	for i in range(mini(3, people.size())):
-		leaders.append(str(people[i]) + " " + str(contributions[people[i]]))
-	leaders_ui.text = "TOP : " + " | ".join(leaders) if not leaders.is_empty() else "12 BOTS COMBATTENT — REJOINS UNE EQUIPE !"
-	if confirmed_hits > 0:
-		status_ui.text += " | %d TOUCHES | %d PARADES" % [confirmed_hits, confirmed_parries]
+		leaders.append("@" + str(people[i]).substr(0, 12) + ": " + str(contributions[people[i]]))
+	leaders_ui.text = "TOP : " + " | ".join(leaders) if not leaders.is_empty() else "TON PSEUDO S'AFFICHERA APRES !join"
+	if match_finished and result_panel != null:
+		var winner := "ROUGE" if wins_red > wins_blue else ("BLEU" if wins_blue > wins_red else "EGALITE")
+		result_ui.text = "FIN DU MATCH %d\n%s\nMANCHES %d - %d\nREPRISE DANS %d s" % [
+			match_number, "VICTOIRE " + winner if winner != "EGALITE" else "EGALITE", wins_red, wins_blue, int(ceil(intermission))
+		]
+
 func _log(message: String) -> void:
 	if log_ui != null:
 		log_ui.text = message
 
 func _on_crystal_damage(team: String, amount: float) -> void:
-	if intermission <= 0:
+	if match_started and not match_finished and intermission <= 0:
 		_damage(team, amount)
 
 func _on_physics_telemetry(hits: int, parries: int, knockouts: int) -> void:
 	confirmed_hits = hits
 	confirmed_parries = parries
 	confirmed_knockouts = knockouts
+
+func _credit_souls(user: String, team: String, amount: int, gift_name: String) -> void:
+	if amount <= 0 or not souls_bank.has(team):
+		return
+	souls_bank[team] = mini(10000, int(souls_bank[team]) + amount)
+	souls_earned[team] = int(souls_earned[team]) + amount
+	_add_points(user, team, amount)
+	arena_live.call("gift_feedback", team, amount, user, gift_name)
+	_log("@" + user + " apporte " + str(amount) + " AMES aux " + team.to_upper())
+	_apply_soul_power(team, user)
+
+func _apply_soul_power(team: String, user: String = "EQUIPE") -> void:
+	if not match_started or intermission > 0 or match_finished:
+		return
+	var balance := int(souls_bank.get(team, 0))
+	var tier := 0
+	var cost := 0
+	if balance >= 120:
+		tier = 3
+		cost = 120
+	elif balance >= 35:
+		tier = 2
+		cost = 35
+	elif balance >= 10:
+		tier = 1
+		cost = 10
+	if tier <= 0:
+		return
+	souls_bank[team] = balance - cost
+	combat_director.call("soul_power", team, tier, user)
+	_log("POUVOIR DES AMES %d ACTIVE • %s" % [tier, team.to_upper()])
