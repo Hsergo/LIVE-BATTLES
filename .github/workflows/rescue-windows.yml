@@ -53,6 +53,14 @@ jobs:
           & $godot.FullName --headless --path rescue/game --script res://tests/mission_rules.gd
           if ($LASTEXITCODE -ne 0) { throw 'Regles de la mission invalides' }
 
+      - name: Verifier les 15 niveaux et les 5 decors
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
+          if (-not $godot) { throw 'Godot absent' }
+          & $godot.FullName --headless --path rescue/game --script res://tests/catalog_rules.gd
+          if ($LASTEXITCODE -ne 0) { throw 'Catalogue de campagne invalide' }
+
       - name: Tester les agents autonomes locaux
         run: |
           $ErrorActionPreference = 'Stop'

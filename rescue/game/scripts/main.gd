@@ -932,42 +932,40 @@ func _draw_lighthouse_scene() -> void:
 		_poly([Vector2(x+1,y-33),Vector2(x+1,y-3),Vector2(x+17,y-3)],Color("#e9f8e2"))
 
 func _draw_hud_3d() -> void:
-	# Native 3D from a dedicated SubViewport; only HUD is drawn in 2D.
-	_draw_header()
-	_draw_scene_legend()
-	_draw_emergency_card()
-	_draw_agent_message()
+	# Minimalist live HUD. The 3D world stays visible over most of the vertical screen.
+	_draw_compact_header_3d()
 	_draw_3d_leaderboards()
-	_draw_status_3d()
-	if action_headline_life > 0:
-		_rect(22,849,676,43,Color("#113c40e8"))
-		_text(action_headline.substr(0,63),Vector2(32,878),18,Color("#ffe9aa"))
-	_draw_footer()
-	if banner_life > 0:
-		_rect(33,854,654,67,Color("#071c2be9"))
-		_rect(33,854,7,67,Color("#ffd67d"))
-		_text(banner.substr(0,49),Vector2(50,894),21,Color("#ffe9bd"))
+	if agent_message_life > 0.0:
+		_rect(21,211,678,37,Color("#0b313ad7"))
+		_text(agent_message.substr(0,62),Vector2(34,237),17,Color("#ffedaf"))
+	if action_headline_life > 0.0:
+		_rect(22,795,676,41,Color("#103d40df"))
+		_text(action_headline.substr(0,63),Vector2(32,823),17,Color("#fff0ba"))
+	if banner_life > 0 and str(state.get("status")) != "RESULT":
+		_rect(32,741,656,42,Color("#3f3221db"))
+		_text(banner.substr(0,53),Vector2(44,769),19,Color("#fff2b5"))
+	if not admin_visible:
+		_draw_footer()
 	if str(state.get("status")) == "RESULT":
 		_draw_result()
 	if flash > 0.0:
-		_rect(0,236,720,720,Color(1.0,0.53,0.31,flash*0.17))
+		_rect(0,210,720,660,Color(1.0,0.53,0.31,flash*0.13))
 
 func _draw_3d_leaderboards() -> void:
 	var people: int = int(state.get("participants").size())
 	var visible_count: int = int(world_3d.call("visible_workers")) if world_3d != null else 0
-	_rect(22,737,676,112,Color("#082334e1"))
-	_rect(22,737,676,5,Color("#ffcf79"))
-	_text("CHANTIER ACTIF : %d PARTICIPANTS  |  %d OUVRIERS A L'ECRAN" % [people,visible_count],
-		Vector2(34,766),17,Color("#eff8ef"))
-	var builders: Array[String] = state.call("top_builders",3)
-	var donors: Array[String] = state.call("top_donors",3)
-	_text("MEILLEURS CONSTRUCTEURS",Vector2(34,790),16,Color("#a1dfd0"))
-	_text("  /  ".join(builders) if not builders.is_empty() else "EN ATTENTE D'ACTIONS",
-		Vector2(34,809),16,Color("#fff0ba"),false,645)
-	_text("MEILLEURS DONATEURS",Vector2(34,830),16,Color("#a1dfd0"))
-	_text("  /  ".join(donors) if not donors.is_empty() else "AUCUN CADEAU NECESSAIRE",
-		Vector2(270,830),16,Color("#ffe2a1"),false,411)
-	# The contribution is attributed to the real actor, not to a synthetic bot.
+	_rect(22,845,676,108,Color("#082334e2"))
+	_rect(22,845,676,4,Color("#eac77d"))
+	_text("%d CONSTRUCTEURS INSCRITS  •  %d OUVRIERS VISIBLES" % [people,visible_count],
+		Vector2(34,870),15,Color("#e6f8ea"))
+	var builders: Array[String] = state.call("top_builders",2)
+	var donors: Array[String] = state.call("top_donors",2)
+	_text("TOP CONSTRUCTEURS",Vector2(34,892),15,Color("#9cdfd2"))
+	_text("  /  ".join(builders) if not builders.is_empty() else "PREMIER CHANTIER EN ATTENTE",
+		Vector2(230,892),16,Color("#fff1b5"),false,452)
+	_text("TOP DONATEURS",Vector2(34,925),15,Color("#e9d7a5"))
+	_text("  /  ".join(donors) if not donors.is_empty() else "CADEAUX FACULTATIFS",
+		Vector2(230,925),16,Color("#ffe3b2"),false,452)
 
 func _draw_status_3d() -> void:
 	if world_3d == null:
@@ -975,3 +973,27 @@ func _draw_status_3d() -> void:
 	var orbit: float = float(world_3d.call("camera_turn_degrees"))
 	_text("CAMERA 360 : %d DEG   •   F7 POUR BLOQUER" % int(orbit),
 		Vector2(30,728),14,Color("#dcebe6"))
+
+func _draw_compact_header_3d() -> void:
+	var info: Dictionary = state.call("scenario_info")
+	_rect(17,13,686,161,Color("#0a1c2de7"))
+	_rect(17,13,6,161,Color("#58ceab"))
+	_text("MISSION %02d / 15" % int(state.get("mission_index")),Vector2(35,39),18,Color("#ace5da"))
+	_text(str(info.get("title","MISSION")).substr(0,37),Vector2(35,70),23,Color("#fff3c9"))
+	var connected_live := game_mode == "LIVE" and status_tiktok.begins_with("TIKTOK LIVE CONNECTE")
+	var badge := "LIVE OK" if connected_live else ("HORS LIGNE" if game_mode=="LIVE" else "DEMO")
+	_rect(566,22,112,30,Color("#146a64") if connected_live else Color("#65584b"))
+	_text(badge,Vector2(573,44),14,Color.WHITE,true,99)
+	var seconds := int(ceil(float(state.get("seconds"))))
+	_text("%02d:%02d" % [int(seconds/60),seconds%60],Vector2(555,103),31,Color("#ffd28e"))
+	_text(str(info.get("objective","")) + " : %d / %d" % [int(state.get("saved")),int(state.get("target"))],
+		Vector2(35,102),18,Color("#f7d7b3"))
+	_rect(35,120,640,8,Color("#203c4a"))
+	_rect(35,120,640*clampf(float(state.get("progress"))/100.0,0,1),8,Color("#efb766"))
+	_text("CHANTIER %d%%" % int(state.get("progress")),Vector2(35,153),16,Color("#ddf6e3"))
+	_text("SOLIDITE %d%%" % int(state.get("strength")),Vector2(202,153),16,Color("#bdddf5"))
+	var special := str(info.get("special","!special"))
+	var header := "!build CONSTRUIRE   !repair REPARER   !rescue SAUVER   " + special
+	_rect(17,178,686,27,Color("#092c36de"))
+	_text(header,Vector2(29,198),15,Color("#e9ffeb"))
+	# !regles is also available. Free progress path is always maintained.

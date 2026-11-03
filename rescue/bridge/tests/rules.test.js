@@ -17,3 +17,9 @@ test('Cadeau inconnu pas de ressource',()=>assert.equal(rules.giftMaterials('JeN
 test('Combo encore en cours ignore',()=>assert.equal(rules.giftCompleted({giftDetails:{giftType:1},repeatEnd:false}),false));
 test('Combo termine accepte',()=>assert.equal(rules.giftCompleted({giftDetails:{giftType:1},repeatEnd:true}),true));
 test('Autre cadeau accepte',()=>assert.equal(rules.giftCompleted({giftType:0}),true));
+
+test('Les regles s affichent a la demande',()=>assert.equal(rules.commandOf('!regles'),'!rules'));
+test('Les actions speciales sont gratuites',()=>assert.equal(rules.commandOf('!pump'),'!special'));
+test('La commande !signal existe pour le phare',()=>assert.equal(rules.commandOf('!signal'),'!special'));
+test('La commande !valve existe pour le barrage',()=>assert.equal(rules.commandOf('!valve'),'!special'));
+test('La commande !launch existe pour l heliport',()=>assert.equal(rules.commandOf('!launch'),'!special'));
