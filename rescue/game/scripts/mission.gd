@@ -12,13 +12,11 @@ const BUILD_COOLDOWN := 2.0
 const REPAIR_COOLDOWN := 2.0
 const RESCUE_COOLDOWN := 2.6
 const DISASTER_STAGES := [0.35, 0.68, 0.88]
-const SCENARIOS := [
-	{"id":"bridge", "title":"LE PONT DE LA DERNIERE CHANCE", "site":"PONT", "objective":"SAUVER LE VILLAGE", "target":12, "hazard":1.0, "material":"BOIS"},
-	{"id":"dike", "title":"LA DIGUE DE LA TEMPETE", "site":"DIGUE", "objective":"PROTEGER LES HABITANTS", "target":14, "hazard":1.15, "material":"PIERRE"},
-	{"id":"lighthouse", "title":"LE PHARE DES NAUFRAGES", "site":"PHARE", "objective":"GUIDER LES BATEAUX", "target":10, "hazard":1.25, "material":"PIECES"}
-]
-
+const Catalog = preload("res://scripts/mission_catalog.gd")
+const SCENARIOS = Catalog.LEVELS
 var demo_mode := true
+var hazard_pressure := 0.0
+var last_special := ""
 var scenario_index := 0
 var mission_index := 1
 var status := "WAITING"
@@ -79,7 +77,7 @@ func _start_mission(reset_people: bool) -> void:
 	cooldowns.clear()
 	scenario_index = (mission_index - 1) % SCENARIOS.size()
 	status = "RUNNING" if demo_mode or not participants.is_empty() else "WAITING"
-	total_duration = DEMO_DURATION if demo_mode else BASE_DURATION + 10.0 * float((mission_index - 1) % 3)
+	total_duration = DEMO_DURATION if demo_mode else float(SCENARIOS[scenario_index]["duration"])
 	seconds = total_duration
 	elapsed = 0.0
 	progress = 14.0
@@ -92,6 +90,8 @@ func _start_mission(reset_people: bool) -> void:
 	votes = {"1":0, "2":0, "3":0}
 	weather_stage = 0
 	flood_level = 0.0
+	hazard_pressure = 0.0
+	last_special = ""
 	last_rescuer = ""
 	next_disaster = 0
 	protection_seconds = 0.0
@@ -160,6 +160,11 @@ func receive(user: String, command: String) -> bool:
 		return repair(user)
 	if cmd == "!rescue":
 		return rescue(user)
+	if cmd == "!special":
+		return special(user)
+	if cmd == "!rules":
+		_note("REGLES: !build, !repair, !rescue, " + str(SCENARIOS[scenario_index]["special"]) + " | CADEAUX FACULTATIFS", "hint", user)
+		return true
 	if cmd in ["1","2","3","!vote 1","!vote 2","!vote 3"]:
 		return vote(user, cmd.right(1))
 	return false
@@ -208,6 +213,47 @@ func rescue(user: String) -> bool:
 	if participants.has(user):
 		rescuer_points[user] = int(rescuer_points.get(user,0)) + 7
 	_note("@" + user + " LANCE UN SAUVETAGE !", "rescue", user)
+	return true
+
+func special(user: String) -> bool:
+	# Each type has its own free cooperative emergency action; gifts provide
+	# optional spectacular reinforcements but are not needed for completion.
+	if not _eligible(user,"special",7.0):
+		return false
+	var name := str(SCENARIOS[scenario_index]["site_type"])
+	var gain := 0.0
+	match name:
+		"bridge":
+			if progress < 99.9:
+				gain = 5.0
+				progress = minf(100.0,progress+gain)
+			elif saved + rescue_queue + crossings.size() < target:
+				rescue_queue += 1
+			strength = minf(100.0,strength+4.0)
+		"dike":
+			strength = minf(100.0,strength+10.0)
+			hazard_pressure = maxf(0.0,hazard_pressure-0.18)
+			protection_seconds = maxf(protection_seconds,5.0)
+		"lighthouse":
+			if progress < 99.9:
+				progress = minf(100.0,progress+5.0)
+			elif saved + rescue_queue + crossings.size() < target:
+				rescue_queue += 1
+			protection_seconds = maxf(protection_seconds,7.0)
+		"dam":
+			strength = minf(100.0,strength+12.0)
+			hazard_pressure = maxf(0.0,hazard_pressure-0.27)
+		"helipad":
+			if progress < 99.9:
+				progress = minf(100.0,progress+5.0)
+			else:
+				rescue_queue += mini(2,maxi(0,target-saved-rescue_queue-crossings.size()))
+			protection_seconds = maxf(protection_seconds,4.0)
+	_credit(user,8)
+	if participants.has(user):
+		builder_points[user] = int(builder_points.get(user,0)) + 8
+	last_special = user
+	_note("@" + user + " ACTIVE " + str(SCENARIOS[scenario_index]["special_label"]), "power", user)
 	return true
 
 func vote(user: String, option: String) -> bool:
@@ -285,14 +331,22 @@ func tick(delta: float) -> void:
 	var duration := total_duration
 	flood_level = clampf(elapsed/maxf(1.0,total_duration),0.0,1.0)
 	var stage_limits := [0.15, 0.32, 0.48] if demo_mode else DISASTER_STAGES
+	hazard_pressure = clampf(hazard_pressure + d * 0.0005 * float(SCENARIOS[scenario_index]["hazard"]),0.0,1.0)
 	if next_disaster < stage_limits.size() and elapsed/duration >= stage_limits[next_disaster]:
 		var damage := (18.0+float(next_disaster)*9.0) * float(SCENARIOS[scenario_index]["hazard"])
+		match str(SCENARIOS[scenario_index]["hazard_kind"]):
+			"seisme","glissement":
+				progress = maxf(0.0,progress-5.0-float(next_disaster))
+			"incendie","blizzard","blackout","panne":
+				wood = maxf(0.0,wood-11.0-float(next_disaster)*5.0)
+			"tsunami","cyclone","ouragan":
+				damage *= 1.23
 		if protection_seconds > 0:
 			damage *= 0.15
 		strength = maxf(0.0,strength-damage)
 		weather_stage = next_disaster+1
 		next_disaster += 1
-		_note("ALERTE %d/3 • %s ENDOMMAGE !" % [next_disaster, str(SCENARIOS[scenario_index]["site"])], "danger")
+		_note("ALERTE %d/3 • %s !" % [next_disaster, str(SCENARIOS[scenario_index]["event_text"])], "danger")
 	if demo_mode:
 		_tick_demo()
 	if rescue_queue > 0 and crossings.size() < 4 and progress >= 99.9 and strength >= 20.0:
