@@ -45,6 +45,12 @@ func _run() -> void:
 	model.set("result_seconds",0.1)
 	model.call("tick",0.1)
 	assert_that(int(model.get("mission_index")) == 2, "Une nouvelle mission commence apres le resultat")
+	assert_that(str(model.call("scenario_info").get("id")) == "dike", "Mission 2 utilise le scenario digue")
+	model.set("saved", int(model.get("target")))
+	model.call("tick",0.1)
+	model.set("result_seconds",0.1)
+	model.call("tick",0.1)
+	assert_that(str(model.call("scenario_info").get("id")) == "lighthouse", "Mission 3 utilise le scenario phare")
 	model.call("configure",true)
 	assert_that(str(model.get("status")) == "RUNNING", "Mode DEMO clairement distinct et auto-actif")
 	assert_that(model.get("participants").size() == 0, "Aucun faux spectateur genere en demonstration")
@@ -59,3 +65,5 @@ func _run() -> void:
 	assert_that(model.get("participants").size() == 0, "Aucun spectateur invente pendant le cycle automatique")
 	print("MISSION RULES TESTS: ", "SUCCESS" if fail_count == 0 else "FAILED " + str(fail_count))
 	quit(0 if fail_count == 0 else 1)
+
+# Les trois scenarios disposent d'objectifs propres et le joueur reste inscrit.

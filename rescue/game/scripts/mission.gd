@@ -12,8 +12,14 @@ const BUILD_COOLDOWN := 2.0
 const REPAIR_COOLDOWN := 2.0
 const RESCUE_COOLDOWN := 2.6
 const DISASTER_STAGES := [0.35, 0.68, 0.88]
+const SCENARIOS := [
+	{"id":"bridge", "title":"LE PONT DE LA DERNIERE CHANCE", "site":"PONT", "objective":"SAUVER LE VILLAGE", "target":12, "hazard":1.0, "material":"BOIS"},
+	{"id":"dike", "title":"LA DIGUE DE LA TEMPETE", "site":"DIGUE", "objective":"PROTEGER LES HABITANTS", "target":14, "hazard":1.15, "material":"PIERRE"},
+	{"id":"lighthouse", "title":"LE PHARE DES NAUFRAGES", "site":"PHARE", "objective":"GUIDER LES BATEAUX", "target":10, "hazard":1.25, "material":"PIECES"}
+]
 
 var demo_mode := true
+var scenario_index := 0
 var mission_index := 1
 var status := "WAITING"
 var seconds := BASE_DURATION
@@ -62,7 +68,8 @@ func _start_mission(reset_people: bool) -> void:
 		participants.clear()
 		contribution.clear()
 		cooldowns.clear()
-	status = "RUNNING" if demo_mode else "WAITING"
+	scenario_index = (mission_index - 1) % SCENARIOS.size()
+	status = "RUNNING" if demo_mode or not participants.is_empty() else "WAITING"
 	total_duration = DEMO_DURATION if demo_mode else BASE_DURATION + 10.0 * float((mission_index - 1) % 3)
 	seconds = total_duration
 	elapsed = 0.0
@@ -70,7 +77,7 @@ func _start_mission(reset_people: bool) -> void:
 	strength = 86.0
 	wood = 34.0
 	saved = 0
-	target = 12 + mini(6, (mission_index - 1) % 4 * 2)
+	target = int(SCENARIOS[scenario_index]["target"])
 	rescue_queue = 0
 	crossings.clear()
 	votes = {"1":0, "2":0, "3":0}
@@ -86,7 +93,7 @@ func _start_mission(reset_people: bool) -> void:
 	action_sequence = 0
 	demo_clock = 0.0
 	bridge_gates = 0
-	_note("MISSION %02d • CONSTRUISEZ LE PONT !" % mission_index, "info")
+	_note("MISSION %02d • %s !" % [mission_index, str(SCENARIOS[scenario_index]["title"])], "info")
 
 func _note(message: String, kind: String = "info", username: String = "") -> void:
 	event_id += 1
@@ -165,17 +172,17 @@ func repair(user: String) -> bool:
 		gain = 9.0
 	strength = minf(100.0,strength+gain)
 	_credit(user,int(gain))
-	_note("@" + user + " REPARE LE PONT", "repair", user)
+	_note("@" + user + " REPARE " + str(SCENARIOS[scenario_index]["site"]), "repair", user)
 	return true
 
 func rescue(user: String) -> bool:
 	if not _eligible(user,"rescue",RESCUE_COOLDOWN):
 		return false
 	if progress < 99.9:
-		_note("PONT INACHEVE • FINISSEZ LES PLANCHES !", "warning")
+		_note(str(SCENARIOS[scenario_index]["site"]) + " INACHEVE • !build", "warning")
 		return false
 	if strength < 20.0:
-		_note("PONT FRAGILE • IL FAUT REPARER !", "warning")
+		_note(str(SCENARIOS[scenario_index]["site"]) + " FRAGILE • !repair", "warning")
 		return false
 	if saved + rescue_queue + crossings.size() >= target:
 		return false
@@ -207,12 +214,12 @@ func vote(user: String, option: String) -> bool:
 	return true
 
 func gift(user: String, gift_name: String, count: int = 1) -> bool:
+	var key := gift_name.strip_edges().to_lower()
+	if not GIFT_RESOURCES.has(key):
+		return false
 	if status == "WAITING" and not demo_mode:
 		join(user)
 	if status != "RUNNING":
-		return false
-	var key := gift_name.strip_edges().to_lower()
-	if not GIFT_RESOURCES.has(key):
 		return false
 	var quantity := clampi(count,1,1000)
 	var amount := mini(1500,quantity * int(GIFT_RESOURCES[key]))
@@ -245,7 +252,7 @@ func tick(delta: float) -> void:
 		result_seconds -= d
 		if result_seconds <= 0.0:
 			mission_index += 1
-			_start_mission(true)
+			_start_mission(false)
 		return
 	if status != "RUNNING":
 		return
@@ -258,13 +265,13 @@ func tick(delta: float) -> void:
 	flood_level = clampf(elapsed/maxf(1.0,total_duration),0.0,1.0)
 	var stage_limits := [0.15, 0.32, 0.48] if demo_mode else DISASTER_STAGES
 	if next_disaster < stage_limits.size() and elapsed/duration >= stage_limits[next_disaster]:
-		var damage := 18.0+float(next_disaster)*9.0
+		var damage := (18.0+float(next_disaster)*9.0) * float(SCENARIOS[scenario_index]["hazard"])
 		if protection_seconds > 0:
 			damage *= 0.15
 		strength = maxf(0.0,strength-damage)
 		weather_stage = next_disaster+1
 		next_disaster += 1
-		_note("VAGUE %d/3 • PONT ENDOMMAGE ! REPARER !" % (next_disaster), "danger")
+		_note("ALERTE %d/3 • %s ENDOMMAGE !" % [next_disaster, str(SCENARIOS[scenario_index]["site"])], "danger")
 	if demo_mode:
 		_tick_demo()
 	if rescue_queue > 0 and crossings.size() < 4 and progress >= 99.9 and strength >= 20.0:
@@ -276,7 +283,7 @@ func tick(delta: float) -> void:
 			crossings.erase(crossing)
 			saved += 1
 			strength = maxf(0.0,strength-0.6)
-			_note("1 HABITANT SAUVE ! " + str(saved) + "/" + str(target), "success")
+			_note(("1 BATEAU GUIDE !" if scenario_index == 2 else "1 HABITANT SAUVE !") + " " + str(saved) + "/" + str(target), "success")
 	if saved >= target:
 		_finish(true)
 	elif strength <= 0.0 or seconds <= 0.0:
@@ -319,3 +326,6 @@ func ranking(limit: int = 3) -> Array[String]:
 	for i in range(mini(limit,users.size())):
 		list.append("@" + str(users[i]).substr(0,14) + " " + str(contribution[users[i]]))
 	return list
+
+func scenario_info() -> Dictionary:
+	return SCENARIOS[scenario_index].duplicate()
