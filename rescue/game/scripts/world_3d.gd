@@ -615,13 +615,25 @@ func _animate_workers(delta: float) -> void:
 		var slot_pos := _worker_position(int(actor["slot"]))
 		var target := slot_pos + Vector3(0,0.0,sin(t*0.5+float(actor["slot"]))*0.16)
 		if remaining > 0.0:
+			var site := str(state.call("scenario_info").get("site_type"))
+			var lane := float(int(actor["slot"])%7)
 			var work_x := -6.7+float(int(float(state.get("progress"))/100.0*14.0))
-			if str(state.call("scenario_info").get("site_type")) == "lighthouse":
-				target = Vector3(-1.7,0.18,float(int(actor["slot"])%8)*0.6-2.4)
-			elif str(state.call("scenario_info").get("site_type")) == "dike":
-				target = Vector3(-2.7,0.16,float(int(actor["slot"])%12)*0.72-4.0)
+			if str(actor["action"]) == "rescue":
+				# The viewer's rescuer physically escorts civilians from the danger zone.
+				if site == "lighthouse":
+					target = Vector3(-6.5,0.18,2.2+lane*0.34)
+				elif site == "helipad":
+					target = Vector3(-2.5,0.18,3.0+lane*0.44)
+				else:
+					target = Vector3(-8.5,0.18,-2.0+lane*0.55)
+			elif site == "lighthouse":
+				target = Vector3(-1.7,0.18,lane*0.7-2.4)
+			elif site == "dike" or site == "dam":
+				target = Vector3(-2.7,0.16,lane*0.72-2.0)
+			elif site == "helipad":
+				target = Vector3(-5.4,0.16,lane*0.55-1.7)
 			else:
-				target = Vector3(work_x-1.1,0.18,float(int(actor["slot"])%12)*0.54-3.1)
+				target = Vector3(work_x-1.1,0.18,lane*0.53-1.8)
 		var moved: Vector3 = rig.call("move_to",target,5.7 if remaining > 0.0 else 2.9,delta)
 		var visual: Node3D = actor["visual"]
 		visual.position.y = 0.018*sin(t*7.2) if remaining > 0.0 else 0.005*sin(t*1.3)
