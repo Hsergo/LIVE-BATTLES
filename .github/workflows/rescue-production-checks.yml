@@ -1,0 +1,21 @@
+name: LIVE RESCUE — Audit de production (sans compilation)
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'rescue/**'
+      - '.github/workflows/rescue-production-checks.yml'
+  workflow_dispatch:
+jobs:
+  static-source-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Obtenir le code
+        uses: actions/checkout@v4
+      - name: Preparer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Valider les sources sans compilation ni Godot
+        run: node rescue/tools/production-preflight.js
