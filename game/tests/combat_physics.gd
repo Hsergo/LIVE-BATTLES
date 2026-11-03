@@ -39,6 +39,10 @@ func _run() -> void:
 	var real_hits := int(director.get("hit_count"))
 	_assert_check(real_hits > 0, "Des attaques automatiques ont touche une hitbox")
 
+	game.queue_free()
+	await physics_frame
+	await physics_frame
+
 	var isolated := Node3D.new()
 	isolated.name = "ArenaCombatTest"
 	root.add_child(isolated)
@@ -57,7 +61,6 @@ func _run() -> void:
 	defender.call("deploy_user", "IsolatedBlue")
 	attacker.rotation.y = PI / 2.0
 	defender.rotation.y = -PI / 2.0
-	defender.call("raise_guard", 2.0)
 	attacker.set_physics_process(false)
 	defender.set_physics_process(false)
 	attacker.set("battle_paused", false)
@@ -67,8 +70,12 @@ func _run() -> void:
 	attacker.connect("hit_landed", func(_a: Node3D, _v: Node3D, _d: float): counters["landed"] += 1)
 	for i in range(4):
 		await physics_frame
+	defender.set("guard_time", 2.0)
+	attacker.set("hit_ids", {})
 	var before := float(defender.get("hp"))
+	print("ISOLATED DEBUG: guard=%s, overlap=%s, before=%s" % [str(defender.get("guard_time")), str(attacker.get("hit_area").get_overlapping_areas().size()), str(before)])
 	attacker.call("_detect_contacts")
+	print("ISOLATED DEBUG: blocked=%s, landed=%s, hp=%s" % [str(counters["blocked"]), str(counters["landed"]), str(defender.get("hp"))])
 	_assert_check(int(counters["blocked"]) == 1, "La parade bloque l'epee dans la zone de collision")
 	_assert_check(is_equal_approx(float(defender.get("hp")), before), "Parade sans degats de vie")
 	defender.set("guard_time", 0.0)
@@ -76,6 +83,7 @@ func _run() -> void:
 	for i in range(2):
 		await physics_frame
 	attacker.call("_detect_contacts")
+	print("ISOLATED DEBUG AFTER STRIKE: blocked=%s, landed=%s, hp=%s" % [str(counters["blocked"]), str(counters["landed"]), str(defender.get("hp"))])
 	_assert_check(int(counters["landed"]) == 1, "Une collision sans parade declenche une touche")
 	_assert_check(float(defender.get("hp")) < before, "Une touche physique retire des PV")
 	print("COMBAT SUMMARY: auto_hits=%d, parades=%d, manual_hits=%d" % [real_hits, int(counters["blocked"]), int(counters["landed"])])
