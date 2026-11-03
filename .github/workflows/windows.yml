@@ -72,6 +72,17 @@ jobs:
           }
           Write-Host 'Export du jeu Windows reussi.'
 
+      - name: Verifier les collisions, les parades et les touches reelles
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $console = Get-ChildItem tools/godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
+          if (-not $console) { throw 'Godot console absente' }
+          & $console.FullName --headless --path game --script res://tests/combat_physics.gd
+          if ($LASTEXITCODE -ne 0) {
+            throw 'Tests physiques du combat echoues'
+          }
+
       - name: Verifier le demarrage du jeu et les evenements locaux
         shell: pwsh
         run: |
