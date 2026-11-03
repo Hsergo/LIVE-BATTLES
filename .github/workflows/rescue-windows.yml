@@ -1,11 +1,7 @@
 name: MISSION SAUVETAGE LIVE — Windows
+# Build and package only when explicitly triggered after art-production review.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - 'rescue/**'
-      - '.github/workflows/rescue-windows.yml'
 jobs:
   build:
     runs-on: windows-latest
