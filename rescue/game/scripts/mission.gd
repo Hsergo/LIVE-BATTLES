@@ -67,7 +67,8 @@ func _start_mission(reset_people: bool) -> void:
 	if reset_people:
 		participants.clear()
 		contribution.clear()
-		cooldowns.clear()
+	# Les spectateurs restent inscrits entre missions ; les delais de commande, non.
+	cooldowns.clear()
 	scenario_index = (mission_index - 1) % SCENARIOS.size()
 	status = "RUNNING" if demo_mode or not participants.is_empty() else "WAITING"
 	total_duration = DEMO_DURATION if demo_mode else BASE_DURATION + 10.0 * float((mission_index - 1) % 3)
