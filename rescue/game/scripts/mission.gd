@@ -3,7 +3,8 @@ extends RefCounted
 ## Aucune identité simulée n'est présentée comme un vrai spectateur en mode LIVE.
 
 const MAX_EVENTS := 8
-const BASE_DURATION := 180.0
+const BASE_DURATION := 160.0
+const DEMO_DURATION := 108.0
 const MAX_MEMBERS := 200
 const GIFT_RESOURCES := {"rose": 4, "gg": 4, "finger heart": 12, "doughnut": 40, "donut": 40, "galaxy": 120}
 const POWER_COSTS := [15, 40, 90]
@@ -29,6 +30,9 @@ var contribution: Dictionary = {}
 var cooldowns: Dictionary = {}
 var votes: Dictionary = {"1":0, "2":0, "3":0}
 var weather_stage := 0
+var total_duration := BASE_DURATION
+var flood_level := 0.0
+var last_rescuer := ""
 var protection_seconds := 0.0
 var supply_level := 0
 var gifted_resources := 0
@@ -59,7 +63,8 @@ func _start_mission(reset_people: bool) -> void:
 		contribution.clear()
 		cooldowns.clear()
 	status = "RUNNING" if demo_mode else "WAITING"
-	seconds = BASE_DURATION + 10.0 * float((mission_index - 1) % 3)
+	total_duration = DEMO_DURATION if demo_mode else BASE_DURATION + 10.0 * float((mission_index - 1) % 3)
+	seconds = total_duration
 	elapsed = 0.0
 	progress = 14.0
 	strength = 86.0
@@ -70,6 +75,8 @@ func _start_mission(reset_people: bool) -> void:
 	crossings.clear()
 	votes = {"1":0, "2":0, "3":0}
 	weather_stage = 0
+	flood_level = 0.0
+	last_rescuer = ""
 	next_disaster = 0
 	protection_seconds = 0.0
 	supply_level = 0
@@ -200,6 +207,8 @@ func vote(user: String, option: String) -> bool:
 	return true
 
 func gift(user: String, gift_name: String, count: int = 1) -> bool:
+	if status == "WAITING" and not demo_mode:
+		join(user)
 	if status != "RUNNING":
 		return false
 	var key := gift_name.strip_edges().to_lower()
@@ -245,7 +254,8 @@ func tick(delta: float) -> void:
 	demo_clock += d
 	protection_seconds = maxf(0.0,protection_seconds-d)
 	wood = minf(350.0,wood+d*0.32)
-	var duration := BASE_DURATION + 10.0*float((mission_index-1)%3)
+	var duration := total_duration
+	flood_level = clampf(elapsed/maxf(1.0,total_duration),0.0,1.0)
 	if next_disaster < DISASTER_STAGES.size() and elapsed/duration >= DISASTER_STAGES[next_disaster]:
 		var damage := 18.0+float(next_disaster)*9.0
 		if protection_seconds > 0:
@@ -253,7 +263,7 @@ func tick(delta: float) -> void:
 		strength = maxf(0.0,strength-damage)
 		weather_stage = next_disaster+1
 		next_disaster += 1
-		_note("ALERTE TEMPETE • PONT FRAGILISE !", "danger")
+		_note("VAGUE %d/3 • PONT ENDOMMAGE ! REPARER !" % (next_disaster), "danger")
 	if demo_mode:
 		_tick_demo()
 	if rescue_queue > 0 and crossings.size() < 4 and progress >= 78.0 and strength >= 20.0:
@@ -272,7 +282,7 @@ func tick(delta: float) -> void:
 		_finish(false)
 
 func _tick_demo() -> void:
-	if demo_clock >= 1.35:
+	if demo_clock >= 0.96:
 		demo_clock = 0.0
 		var stage := action_sequence % 7
 		if progress < 84.0:
