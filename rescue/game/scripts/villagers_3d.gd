@@ -348,6 +348,14 @@ func visible_count() -> int:
 func movement_count() -> int:
 	return count_away
 
+func first_in_transit_position() -> Vector3:
+	for actor in crowd:
+		if str(actor.get("phase","")) == "crossing":
+			var npc: Node3D = actor["node"]
+			if is_instance_valid(npc):
+				return npc.position
+	return Vector3.ZERO
+
 func last_rescued_position() -> Vector3:
 	if crowd.is_empty() or mission == null:
 		return Vector3(12.0,0.2,0.0)

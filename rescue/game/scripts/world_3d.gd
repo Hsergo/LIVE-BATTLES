@@ -38,6 +38,9 @@ var last_saved := 0
 var last_event := 0
 var total_spawned := 0
 var water_foam: Array[MeshInstance3D] = []
+var rescue_helicopter: Node3D
+var rescue_rotor: Node3D
+var camera_focus: Vector3 = Vector3.ZERO
 var roster_clock := 0.0
 var cached_roster_size := 0
 
@@ -78,7 +81,7 @@ func _setup_environment() -> void:
 	add_child(sunlight)
 	camera = Camera3D.new()
 	camera.current = true
-	camera.fov = 59.0
+	camera.fov = 65.0
 	camera.near = 0.15
 	camera.far = 190.0
 	add_child(camera)
@@ -167,6 +170,8 @@ func _rebuild_world() -> void:
 	boats.clear()
 	roof_parts.clear()
 	water_foam.clear()
+	rescue_helicopter = null
+	rescue_rotor = null
 	rain.clear()
 	civilians = null
 	last_event = 0
@@ -225,6 +230,7 @@ func _rebuild_world() -> void:
 	_build_crane()
 	_build_boats()
 	_build_environment_details()
+	_build_rescue_camps()
 	civilians = load("res://scripts/villagers_3d.gd").new()
 	terrain.add_child(civilians)
 	civilians.call("setup",state,site_type)
@@ -359,6 +365,14 @@ func _build_helipad() -> void:
 	_box(heli,Vector3(0,1.15,0),Vector3(5.4,0.08,0.15),Color("#e7e6d9"))
 	_box(heli,Vector3(0,0.24,0),Vector3(0.15,0.35,4.2),Color("#ece9df"))
 	heli.name = "RescueHelicopter"
+	rescue_helicopter = heli
+	var rotor := Node3D.new()
+	rotor.name = "RescueRotor"
+	heli.add_child(rotor)
+	rotor.position = Vector3(0,1.20,0)
+	_box(rotor,Vector3.ZERO,Vector3(5.8,0.055,0.18),Color("#dfe7df"))
+	_box(rotor,Vector3.ZERO,Vector3(0.18,0.055,5.8),Color("#dfe7df"))
+	rescue_rotor = rotor
 
 func _build_crane() -> void:
 	var crane := Node3D.new()
@@ -691,9 +705,13 @@ func _process(delta: float) -> void:
 	surprise_time = maxf(0.0,surprise_time-d)
 	if orbit_enabled:
 		orbit_angle = fposmod(orbit_angle+d*TAU/39.0,TAU)
-	var radius := 22.8
-	var desired := Vector3(sin(orbit_angle)*radius,10.3+sin(clock*0.2)*0.35,cos(orbit_angle)*radius)
-	var target := Vector3(0,1.85,0)
+	var radius := 21.8
+	var desired := Vector3(sin(orbit_angle)*radius,8.9+sin(clock*0.2)*0.35,cos(orbit_angle)*radius)
+	var target := Vector3(0,1.55,0)
+	if civilians != null and is_instance_valid(civilians) and int(civilians.call("movement_count")) > 0 and spotlight_time <= 0.0:
+		var active_rescue: Vector3 = civilians.call("first_in_transit_position")
+		target = target.lerp(active_rescue+Vector3(0,0.7,0),0.45)
+		desired = desired.lerp(active_rescue+Vector3(9.0,7.0,11.0),0.23)
 	if spotlight_time > 0 and focus_user != "" and actors.has(focus_user):
 		var focus: Node3D = actors[focus_user]["rig"]
 		if is_instance_valid(focus):
@@ -737,6 +755,47 @@ func camera_turn_degrees() -> float:
 func camera_mode_next() -> void:
 	orbit_enabled = not orbit_enabled
 
+func _build_rescue_camps() -> void:
+	# The two ends of the evacuation must be legible from any 360 view.
+	# Refuge and waiting areas sit behind the character paths, not on top.
+	var emergency_tent := Node3D.new()
+	emergency_tent.name = "EmergencyCareCamp"
+	terrain.add_child(emergency_tent)
+	emergency_tent.position = Vector3(13.3,0.14,-9.2)
+	_box(emergency_tent,Vector3(0,0.2,0),Vector3(5.5,0.28,4.4),Color("#bcb7a1"))
+	_box(emergency_tent,Vector3(0,1.6,0),Vector3(4.8,2.6,3.5),Color("#e7e4d4"))
+	var rooftop := _box(emergency_tent,Vector3(0,3.16,0),Vector3(5.2,0.32,3.9),Color("#d1dfd2"))
+	rooftop.rotation.z = 0.08
+	_box(emergency_tent,Vector3(0,1.5,1.79),Vector3(1.12,2.4,0.12),Color("#399282"))
+	_box(emergency_tent,Vector3(0,2.7,1.87),Vector3(0.78,0.19,0.10),Color("#f4f6e4"))
+	_box(emergency_tent,Vector3(0,2.7,1.92),Vector3(0.13,0.67,0.10),Color("#f4f6e4"))
+	var refuge_beacon := OmniLight3D.new()
+	refuge_beacon.position = Vector3(0.0,3.65,0.0)
+	refuge_beacon.light_color = Color("#b5f5db")
+	refuge_beacon.omni_range = 8.5
+	refuge_beacon.light_energy = 0.75
+	emergency_tent.add_child(refuge_beacon)
+	var waiting_camp := Node3D.new()
+	waiting_camp.name = "EvacuationAssemblyPoint"
+	terrain.add_child(waiting_camp)
+	waiting_camp.position = Vector3(-14.2,0.10,-8.0)
+	_box(waiting_camp,Vector3(0,0.12,0),Vector3(5.7,0.18,4.3),Color("#acb39d"))
+	for x in [-2.0,2.0]:
+		_cylinder(waiting_camp,Vector3(x,0.85,1.82),0.06,1.55,Color("#deb875"))
+	_box(waiting_camp,Vector3(0,1.25,1.80),Vector3(4.35,0.11,0.12),Color("#e9cc84"))
+	var ambulance := Node3D.new()
+	ambulance.name = "RescueAmbulance"
+	terrain.add_child(ambulance)
+	ambulance.position = Vector3(18.6,0.13,-7.7)
+	_box(ambulance,Vector3(0,0.89,0),Vector3(3.6,1.65,1.75),Color("#eef0e2"))
+	_box(ambulance,Vector3(-0.56,1.45,0.91),Vector3(0.81,0.57,0.09),Color("#5e99b4"))
+	_box(ambulance,Vector3(1.3,1.07,0.91),Vector3(0.48,0.48,0.13),Color("#e76e57"))
+	_box(ambulance,Vector3(1.3,1.07,0.98),Vector3(0.17,0.75,0.08),Color("#f1f4e9"))
+	_box(ambulance,Vector3(0,1.8,0),Vector3(0.3,0.14,0.22),Color("#6fd9e1"))
+	for x in [-1.1,1.1]:
+		for z in [-0.72,0.72]:
+			_cylinder(ambulance,Vector3(x,0.34,z),0.31,0.22,Color("#39444b"))
+
 func _build_environment_details() -> void:
 	# Curved river surface detail, moving rain and a refuge light,
 	# without external shaders or purchased assets.
@@ -778,6 +837,11 @@ func _animate_environment(delta: float) -> void:
 				drop.position = Vector3(randf_range(-20.0,20.0),randf_range(9.0,15.0),randf_range(-17.0,17.0))
 	if light_refuge != null:
 		light_refuge.light_energy = 1.15+0.13*sin(clock*1.8)
+	if rescue_rotor != null and is_instance_valid(rescue_rotor):
+		rescue_rotor.rotation.y += delta * 24.0
+	if rescue_helicopter != null and is_instance_valid(rescue_helicopter):
+		var has_passengers := not state.get("crossings").is_empty()
+		rescue_helicopter.position.y = 3.3+0.12*sin(clock*2.3)+(1.0 if has_passengers else 0.0)
 
 func visible_civilians() -> int:
 	return int(civilians.call("visible_count")) if civilians != null else 0
