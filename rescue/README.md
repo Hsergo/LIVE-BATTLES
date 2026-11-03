@@ -33,3 +33,5 @@ Le dépôt est passé en **phase de direction artistique et de production des PN
 - `docs/DIRECTION_ARTISTIQUE_PERSONNAGES.md` : règles de qualité, origine des futurs modèles riggés et critères de sortie.
 
 Les nouveaux personnages restent **stylisés/procéduraux**. Un personnage professionnel texturé et riggé n'est pas encore importé, et aucun test de rendu final Windows n'a été effectué pour cette phase.
+
+**Production riggée, sans compilation Windows :** modèle GLB CC0 importé, pilotage de Skeleton3D, collisions des ouvrages, évacuation suspendue si la structure est dangereuse. Voir docs/DIRECTION_ARTISTIQUE_PERSONNAGES.md et game/tests/art_production_qa.gd (test non exécuté).

@@ -73,3 +73,30 @@ L'intégration de ces packs n'est **pas encore effectuée**. Ne pas leur attribu
 7. Déclenchement manuel de GitHub Actions seulement après ces vérifications.
 
 **Décision :** ne pas compiler aujourd'hui ; continuer production des personnages, assets et animation avant le paquet Windows.
+
+
+## Production — premier vrai modèle riggé importé
+
+Un vrai GLB de Quaternius Universal Base Characters / Superhero Male (741 320 octets, 65 os, maillage skinné) est désormais stocké avec licence CC0 et provenance :
+- game/assets/characters/base_male_rigged.glb
+- game/assets/licenses/QUATERNIUS-LICENSE.txt
+- game/assets/licenses/QUATERNIUS-SOURCE.md
+
+Le modèle ne contient **aucune animation embarquée** : le contrôleur game/scripts/rigged_humanoid.gd pilote les os pour repos, marche, construction, réparation et sauvetage. Les mouvements doivent encore être validés visuellement, et ne remplacent pas des animations de motion capture.
+
+**Échantillonnage :** un ouvrier sur six peut charger le maillage riggé. Quelques villageois adultes peuvent également en bénéficier. Les silhouettes d'enfants et d'aînés restent procédurales en attendant des modèles distincts sous licence vérifiée.
+
+## Collisions, itinéraires et sécurité
+
+Les rives et les sections bâties ont maintenant des StaticBody3D et CollisionShape3D. Les collisions de sections non construites sont désactivées. L'évacuation s'arrête si le pont devient dangereux et reprend après réparation. Les personnages suivent encore des chemins scénarisés : navigation dynamique / évitement des collisions entre personnes restent à produire.
+
+## Tests de recette à lancer après la production
+
+Le test game/tests/art_production_qa.gd contrôle la présence des os, les états de mouvement, les colliders physiques, la suspension d'une évacuation et les 5 types d'environnements. **Ce test est rédigé mais non exécuté. La compilation automatique reste désactivée.**
+
+## Travaux artistiques restants
+
+- Vérifier le sens et l'amplitude des poses osseuses sur le modèle importé.
+- Importer modèles féminins, enfant et aîné sous licence vérifiée, et des cycles animés professionnels.
+- Ajouter une navigation locale avec évitement et collision physique des personnages.
+- Tester visuellement le rendu et les performances sur Windows avec OBS.
