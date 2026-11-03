@@ -10,6 +10,9 @@ const UNIFORMS := [Color("#eb8c45"), Color("#efb73e"), Color("#4db8a7"), Color("
 var state: RefCounted
 var live_mode := false
 var terrain: Node3D
+var civilians: Node3D
+var rain: Array[MeshInstance3D] = []
+var light_refuge: OmniLight3D
 var camera: Camera3D
 var sunlight: DirectionalLight3D
 var water: MeshInstance3D
@@ -149,6 +152,8 @@ func _rebuild_world() -> void:
 	boats.clear()
 	roof_parts.clear()
 	water_foam.clear()
+	rain.clear()
+	civilians = null
 	last_event = 0
 	last_saved = 0
 	# Generous terrain so full orbit never reveals a void.
@@ -201,6 +206,10 @@ func _rebuild_world() -> void:
 			_build_bridge()
 	_build_crane()
 	_build_boats()
+	_build_environment_details()
+	civilians = load("res://scripts/villagers_3d.gd").new()
+	terrain.add_child(civilians)
+	civilians.call("setup",state,site_type)
 	_update_segments(float(state.get("progress")))
 	_sync_workers()
 
@@ -538,19 +547,19 @@ func _animate_workers(delta: float) -> void:
 		rig.rotation.y = lerp_angle(rig.rotation.y,0.6 if fighting else -0.25,minf(1.0,delta*2.0))
 
 func _animate_rescues() -> void:
-	var idx := 0
-	for boat in boats:
-		boat.visible = false
-		var crossing: Array = state.get("crossings")
-		if idx < crossing.size():
-			var p := float(crossing[idx].get("p",0.0))
-			boat.visible = true
-			if str(state.call("scenario_info").get("site_type")) == "lighthouse":
-				boat.position = Vector3(-5.7+p*11.4,-0.19,2.4+float(idx)*1.4)
-			else:
-				boat.position = Vector3(-6.2+p*12.4,1.13,0.25+float(idx)*0.52)
-			boat.rotation.y = -0.4 if str(state.call("scenario_info").get("site_type")) == "lighthouse" else 0.0
-		idx += 1
+	# Boats are a real visual only during maritime rescue missions.
+	var is_maritime := str(state.call("scenario_info").get("site_type")) == "lighthouse"
+	var moving: Array = state.get("crossings")
+	for i in range(boats.size()):
+		var boat: Node3D = boats[i]
+		boat.visible = is_maritime and i < moving.size()
+		if boat.visible:
+			var crossing: Dictionary = moving[i]
+			var p := float(crossing.get("p",0.0))
+			var lane := float(crossing.get("lane",0))
+			boat.position = Vector3(-5.8+p*11.6,-0.14+sin(clock*2.4+lane)*0.08,2.4+lane*0.6)
+			boat.rotation.y = -0.3+sin(clock*1.3+float(i))*0.12
+
 
 func _process(delta: float) -> void:
 	if state == null:
@@ -594,6 +603,9 @@ func _process(delta: float) -> void:
 		_sync_workers()
 	_animate_workers(d)
 	_animate_rescues()
+	if civilians != null and is_instance_valid(civilians):
+		civilians.call("sync",d)
+	_animate_environment(d)
 
 func visible_workers() -> int:
 	return actors.size()
@@ -606,3 +618,51 @@ func camera_turn_degrees() -> float:
 
 func camera_mode_next() -> void:
 	orbit_enabled = not orbit_enabled
+
+func _build_environment_details() -> void:
+	# Curved river surface detail, moving rain and a refuge light,
+	# without external shaders or purchased assets.
+	for i in range(26):
+		var x := randf_range(-5.1,5.1)
+		var z := randf_range(-18.5,18.5)
+		var ripple := _box(terrain,Vector3(x,-0.50,z),Vector3(randf_range(0.45,1.5),0.025,0.06),Color("#90d5dc"))
+		water_foam.append(ripple)
+	for i in range(34):
+		var streak := _box(terrain,Vector3(randf_range(-22,22),randf_range(2.0,11.0),randf_range(-18,18)),
+			Vector3(0.022,randf_range(0.42,1.1),0.022),Color("#a9dce8"))
+		streak.visible = false
+		rain.append(streak)
+	light_refuge = OmniLight3D.new()
+	light_refuge.position = Vector3(12.4,4.2,-5.0)
+	light_refuge.light_color = Color("#ffe0ab")
+	light_refuge.light_energy = 1.15
+	light_refuge.omni_range = 10.0
+	terrain.add_child(light_refuge)
+
+func _animate_environment(delta: float) -> void:
+	var stage := int(state.get("weather_stage"))
+	var flood := float(state.get("flood_level"))
+	for i in range(water_foam.size()):
+		var wave: MeshInstance3D = water_foam[i]
+		var pos := wave.position
+		pos.z += delta*(1.1+flood*3.8+float(i%3)*0.12)
+		if pos.z > 19.8:
+			pos.z = -19.8
+		pos.y = water.position.y+0.16+sin(clock*2.8+float(i))*0.025
+		wave.position = pos
+	for i in range(rain.size()):
+		var drop: MeshInstance3D = rain[i]
+		drop.visible = stage > 0
+		if stage > 0:
+			drop.position.y -= delta*(6.5+float(i%7)+float(stage)*1.9)
+			drop.position.x += delta*(1.0+float(stage)*1.7)
+			if drop.position.y < 0.8 or drop.position.x > 26.0:
+				drop.position = Vector3(randf_range(-20.0,20.0),randf_range(9.0,15.0),randf_range(-17.0,17.0))
+	if light_refuge != null:
+		light_refuge.light_energy = 1.15+0.13*sin(clock*1.8)
+
+func visible_civilians() -> int:
+	return int(civilians.call("visible_count")) if civilians != null else 0
+
+func crossing_civilians() -> int:
+	return int(civilians.call("movement_count")) if civilians != null else 0
