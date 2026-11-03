@@ -344,8 +344,19 @@ func _worker(name: String) -> Dictionary:
 	tag.modulate = Color("#ffffff")
 	tag.outline_size = 8
 	tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	var action_tag := Label3D.new()
+	rig.add_child(action_tag)
+	action_tag.text = ""
+	action_tag.visible = false
+	action_tag.position = Vector3(0,3.16,0)
+	action_tag.font_size = 52
+	action_tag.pixel_size = 0.0047
+	action_tag.modulate = Color("#fff0a5")
+	action_tag.outline_size = 9
+	action_tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
 	limbs["rig"] = rig
 	limbs["label"] = tag
+	limbs["action_tag"] = action_tag
 	limbs["age"] = 0.0
 	limbs["action_time"] = 0.0
 	limbs["action"] = "idle"
@@ -418,6 +429,19 @@ func record_event(event: Dictionary) -> void:
 	var actor: Dictionary = actors[name]
 	actor["action_time"] = 3.5
 	actor["action"] = kind
+	var action_tag: Label3D = actor["action_tag"]
+	action_tag.visible = kind != "join"
+	var contribution_text := ""
+	match kind:
+		"build":
+			contribution_text = "CONSTRUCTION !"
+		"repair":
+			contribution_text = "REPARATION !"
+		"rescue":
+			contribution_text = "SAUVETAGE !"
+		"gift":
+			contribution_text = "RENFORT !"
+	action_tag.text = contribution_text
 	actor["last_used"] = clock
 	focus_user = name
 	spotlight_time = 3.5 if kind != "join" else 1.5
@@ -437,6 +461,10 @@ func _animate_workers(delta: float) -> void:
 		var t := float(actor["age"])
 		var remaining := maxf(0,float(actor["action_time"])-delta)
 		actor["action_time"] = remaining
+		var action_tag: Label3D = actor["action_tag"]
+		action_tag.visible = remaining > 0.0 and str(actor["action"]) != "join"
+		if action_tag.visible:
+			action_tag.position.y = 3.16+sin(t*3.4)*0.08
 		var slot_pos := _worker_position(int(actor["slot"]))
 		var target := slot_pos + Vector3(0,0.0,sin(t*0.5+float(actor["slot"]))*0.16)
 		if remaining > 0.0:

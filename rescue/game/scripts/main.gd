@@ -151,6 +151,11 @@ func _process(delta: float) -> void:
 				var scene_event: Dictionary = events[index]
 				if int(scene_event.get("id",0)) > int(world_3d.get("last_event")):
 					world_3d.call("record_event",scene_event)
+					var actor_name := str(scene_event.get("user",""))
+					var event_kind := str(scene_event.get("kind",""))
+					if event_kind in ["build","repair","rescue","gift"] and not actor_name.is_empty():
+						action_headline = "@" + actor_name.substr(0,20) + "  •  " + str(scene_event.get("message","")).substr(0,43)
+						action_headline_life = 4.5
 					world_3d.set("last_event",int(scene_event.get("id",0)))
 		var e: Dictionary = events[0]
 		if int(e.get("id",0)) != last_event:
@@ -934,6 +939,9 @@ func _draw_hud_3d() -> void:
 	_draw_agent_message()
 	_draw_3d_leaderboards()
 	_draw_status_3d()
+	if action_headline_life > 0:
+		_rect(22,849,676,43,Color("#113c40e8"))
+		_text(action_headline.substr(0,63),Vector2(32,878),18,Color("#ffe9aa"))
 	_draw_footer()
 	if banner_life > 0:
 		_rect(33,854,654,67,Color("#071c2be9"))
