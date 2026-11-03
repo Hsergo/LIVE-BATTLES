@@ -1,0 +1,28 @@
+{
+  "description": "Quantites fictives de materiaux de construction pour chaque cadeau reconnu, pas des prix TikTok.",
+  "gifts": {
+    "rose": 4,
+    "gg": 4,
+    "finger heart": 12,
+    "doughnut": 40,
+    "donut": 40,
+    "galaxy": 120
+  },
+  "aliases": {
+    "flower": "rose"
+  },
+  "powered_actions": [
+    {
+      "units": 15,
+      "name": "Livraison helicoptere"
+    },
+    {
+      "units": 40,
+      "name": "Grue rapide"
+    },
+    {
+      "units": 90,
+      "name": "Digue d'urgence"
+    }
+  ]
+}
