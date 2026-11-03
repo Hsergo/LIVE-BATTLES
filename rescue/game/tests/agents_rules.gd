@@ -15,10 +15,20 @@ func _run() -> void:
 	var w: String = agents.call("welcome","alice",game)
 	check(w.contains("alice"),"Bienvenue avec pseudo authentique")
 	check(str(agents.call("welcome","alice",game")).is_empty(),"Une bienvenue par joueur")
-	check(str(agents.call("tick",8.0,game,true)).contains("!join"),"Invitation a rejoindre gratuitement")
+	var guidance := ""
+	for i in range(40):
+		guidance = str(agents.call("tick",0.2,game,true))
+		if not guidance.is_empty():
+			break
+	check(guidance.contains("!join"),"Invitation a rejoindre gratuitement")
 	game.call("join","alice")
 	game.set("strength",20.0)
-	check(str(agents.call("tick",17.0,game,true)).contains("!repair"),"Agent de securite avertit en cas de danger")
+	guidance = ""
+	for i in range(100):
+		guidance = str(agents.call("tick",0.2,game,true))
+		if not guidance.is_empty():
+			break
+	check(guidance.contains("!repair"),"Agent de securite avertit en cas de danger")
 	var gift: String = agents.call("reaction",{"kind":"gift","user":"alice"},game,true)
 	check(gift.contains("!build") and gift.contains("GRATUIT"),"Remerciement cadeau non coercitif")
 	check(str(agents.call("reaction",{"kind":"join","user":"alice"},game,true)).is_empty(),"Pas de double bienvenue")

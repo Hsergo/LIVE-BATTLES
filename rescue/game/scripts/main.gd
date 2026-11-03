@@ -394,9 +394,15 @@ func _draw() -> void:
 	)
 	draw_set_transform(camera_pan,0.0,Vector2(zoom,zoom))
 	_draw_landscape()
-	_draw_village()
-	_draw_bridge()
-	_draw_bridge_detail()
+	match current_scenario:
+		"dike":
+			_draw_dike_scene()
+		"lighthouse":
+			_draw_lighthouse_scene()
+		_:
+			_draw_village()
+			_draw_bridge()
+			_draw_bridge_detail()
 	_draw_people()
 	_draw_weather()
 	_draw_fx()
@@ -803,3 +809,67 @@ func _draw_agent_message() -> void:
 	_rect(26,449,6,54,Color("#6ae6c6"))
 	_text("ASSISTANTS DU JEU",Vector2(43,470),13,Color("#a6d5e0"))
 	_text(agent_message,Vector2(43,491),18,Color("#fff0bb"),false,636)
+
+func _draw_dike_scene() -> void:
+	# Mission 2 : digue de protection contre les vagues, chantier en progression.
+	_rect(0,530,720,370,Color("#124e70"))
+	for i in range(19):
+		var wave_y := 570.0 + float(i)*18.0
+		draw_line(Vector2(45+sin(clock*2.3+float(i))*30,wave_y),
+			Vector2(622+sin(clock*2.7+float(i))*18,wave_y+5),Color(0.69,0.96,1.0,0.06),2.0)
+	_house(50,523,0.85,Color("#d97b62"))
+	_house(117,566,0.64,Color("#cf9a65"))
+	_house(610,538,0.83,Color("#79b5a3"))
+	_text("ZONE A PROTEGER",Vector2(28,501),17,Color("#ffdeaa"))
+	_text("REFUGE EN HAUTEUR",Vector2(507,510),17,Color("#ddfdd7"))
+	var done := float(state.get("progress"))/100.0*10.0
+	for i in range(10):
+		var x := 150.0+float(i)*44.0
+		var fraction := clampf(done-float(i),0,1)
+		_rect(x,675,42,80,Color("#1c4556"))
+		if fraction>0:
+			_rect(x,675,42*fraction,80,Color("#c3b799"))
+			_rect(x,671,42*fraction,12,Color("#f4ddb5"))
+			_rect(x,736,42*fraction,12,Color("#687d85"))
+	for i in range(5):
+		draw_line(Vector2(170+float(i)*88,760),Vector2(164+float(i)*88,846),Color("#5f6572"),9.0)
+	var safe := float(state.get("strength"))/100.0
+	_rect(153,837,460*safe,8,Color("#69ecc3"))
+	for crossing in state.get("crossings"):
+		var p := float(crossing.get("p",0))
+		_draw_person(Vector2(160+p*440,659+sin(p*TAU)*6),Color("#ffe9a5"),1.1,false)
+	if int(state.get("weather_stage"))>0:
+		var surge := float(state.get("flood_level"))
+		draw_arc(Vector2(374,801-surge*80),150,PI,TAU,38,Color(0.87,0.98,1.0,0.17+0.17*surge),7.0)
+
+func _draw_lighthouse_scene() -> void:
+	# Mission 3 : phare et faisceau, bateaux guides vers la cote.
+	_rect(0,460,720,445,Color("#07233e"))
+	for i in range(24):
+		var yy := 545.0+float(i)*13
+		draw_line(Vector2(sin(clock+float(i))*19,yy),
+			Vector2(716+sin(clock*1.3+float(i))*17,yy+4),Color(0.48,0.76,0.96,0.07),2.0)
+	_poly([Vector2(295,720),Vector2(420,720),Vector2(485,860),Vector2(235,860)],Color("#6d777c"))
+	var progress := float(state.get("progress"))/100.0
+	_rect(345,720-220*progress,64,220*progress,Color("#e5e0c5"))
+	_rect(360,720-220*progress,14,220*progress,Color("#d76f5b"))
+	_rect(345,710,64,18,Color("#53626d"))
+	var light_y := 478.0+220.0*(1.0-progress)
+	if progress>0.5:
+		_rect(333,light_y-13,87,17,Color("#d9c5a1"))
+		_rect(355,light_y-44,43,30,Color("#e9f0d8"))
+		_rect(351,light_y-52,52,12,Color("#c77959"))
+		draw_circle(Vector2(379,light_y-31),8,Color("#ffed94"))
+		if progress>0.98:
+			var angle := sin(clock*0.65)*0.82
+			var center := Vector2(379,light_y-31)
+			_poly([center,center+Vector2(-200+angle*150,-70),center+Vector2(-175+angle*150,100)],
+				Color(1,0.93,0.54,0.08))
+	_text("REPARER LE PHARE",Vector2(302,444),21,Color("#ffe8b2"))
+	for ship in state.get("crossings"):
+		var p := float(ship.get("p",0))
+		var x := 82.0+p*555.0
+		var y := 790.0+float(ship.get("lane",0))*17.0+sin(clock*2.8+p)*3.0
+		_poly([Vector2(x-25,y),Vector2(x+25,y),Vector2(x+14,y+16),Vector2(x-13,y+16)],Color("#d49b6d"))
+		draw_line(Vector2(x,y-34),Vector2(x,y),Color("#e9d8b4"),3.0)
+		_poly([Vector2(x+1,y-33),Vector2(x+1,y-3),Vector2(x+17,y-3)],Color("#e9f8e2"))
