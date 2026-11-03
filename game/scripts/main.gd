@@ -28,10 +28,19 @@ var status_ui: Label
 var log_ui: Label
 var leaders_ui: Label
 var live_username: LineEdit
+var arena_live: Node3D
+var wins_red := 0
+var wins_blue := 0
+var match_finished := false
+var bridge_state := "MODE SIMULATION"
+var recruitment_ui: Label
 
 func _ready() -> void:
 	randomize()
 	_build_scene()
+	arena_live = load("res://scripts/arena_live.gd").new()
+	add_child(arena_live)
+	arena_live.call("setup", fighters)
 	_build_hud()
 	_connect_bridge()
 	_log("Bienvenue dans LIVE BATTLES !")
@@ -159,32 +168,46 @@ func _build_hud() -> void:
 	top.add_child(round_ui)
 	status_ui = _text("MODE SIMULATION", 15)
 	top.add_child(status_ui)
+	recruitment_ui = _text("Rejoins le combat : !join red ou !join blue", 17)
+	top.add_child(recruitment_ui)
 	var bottom := _panel(root, false)
 	log_ui = _text("", 19)
 	bottom.add_child(log_ui)
 	leaders_ui = _text("", 16)
 	bottom.add_child(leaders_ui)
+	var toggle := Button.new()
+	toggle.text = "OUTILS DE TEST / CONNECTER TIKTOK"
+	bottom.add_child(toggle)
+	var test_panel := VBoxContainer.new()
+	test_panel.visible = false
+	bottom.add_child(test_panel)
+	var panel_container := bottom.get_parent() as PanelContainer
+	panel_container.offset_top = -190
+	toggle.pressed.connect(func():
+		test_panel.visible = not test_panel.visible
+		panel_container.offset_top = -420 if test_panel.visible else -190
+	)
 	var connection_row := HBoxContainer.new()
-	bottom.add_child(connection_row)
+	test_panel.add_child(connection_row)
 	live_username = LineEdit.new()
 	live_username.placeholder_text = "Compte TikTok (sans @)"
 	live_username.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	connection_row.add_child(live_username)
 	_button(connection_row, "CONNECTER", _request_tiktok)
 	var row1 := HBoxContainer.new()
-	bottom.add_child(row1)
+	test_panel.add_child(row1)
 	_button(row1, "ROUGE REJOINDRE", func(): _join("DemoRouge", "red"))
 	_button(row1, "BLEU REJOINDRE", func(): _join("DemoBleu", "blue"))
 	var row2 := HBoxContainer.new()
-	bottom.add_child(row2)
+	test_panel.add_child(row2)
 	_button(row2, "CADEAU ROUGE", func(): _gift("DemoRouge", 10, "Cadeau test"))
 	_button(row2, "CADEAU BLEU", func(): _gift("DemoBleu", 10, "Cadeau test"))
 	var row3 := HBoxContainer.new()
-	bottom.add_child(row3)
+	test_panel.add_child(row3)
 	_button(row3, "ATTAQUE ROUGE", func(): _action("DemoRouge", "!attack"))
 	_button(row3, "ATTAQUE BLEUE", func(): _action("DemoBleu", "!attack"))
 	var row4 := HBoxContainer.new()
-	bottom.add_child(row4)
+	test_panel.add_child(row4)
 	_button(row4, "SOINS ROUGE", func(): _action("DemoRouge", "!heal"))
 	_button(row4, "SOINS BLEU", func(): _action("DemoBleu", "!heal"))
 
@@ -234,29 +257,49 @@ func _members(team: String) -> int:
 	return number
 
 func _damage(team: String, damage: float) -> void:
+	var dealt := 0.0
 	if team == "red":
 		var shielded := minf(red_shield, damage)
 		red_shield -= shielded
-		red_hp = maxf(0, red_hp - damage + shielded)
+		dealt = minf(red_hp, damage - shielded)
+		red_hp = maxf(0, red_hp - dealt)
 	elif team == "blue":
 		var shielded := minf(blue_shield, damage)
 		blue_shield -= shielded
-		blue_hp = maxf(0, blue_hp - damage + shielded)
-
+		dealt = minf(blue_hp, damage - shielded)
+		blue_hp = maxf(0, blue_hp - dealt)
+	if arena_live != null:
+		arena_live.call("set_health", team, red_hp if team == "red" else blue_hp)
+		if dealt > 0:
+			arena_live.call("strike", "blue" if team == "red" else "red", dealt, "EPEE")
 func _end_round() -> void:
 	if intermission > 0:
 		return
 	intermission = 4.0
 	if red_hp > blue_hp:
+		wins_red += 1
 		score_red += 10
-		_log("VICTOIRE ROUGE !")
+		_log("MANCHE GAGNEE : ROUGES !")
 	elif blue_hp > red_hp:
+		wins_blue += 1
 		score_blue += 10
-		_log("VICTOIRE BLEUE !")
+		_log("MANCHE GAGNEE : BLEUS !")
 	else:
 		_log("MATCH NUL")
-
+	if wins_red >= 3 or wins_blue >= 3:
+		match_finished = true
+		intermission = 8.0
+		_log("BATAILLE TERMINEE ! VAINQUEURS : " + ("ROUGES" if wins_red >= 3 else "BLEUS"))
 func _next_round() -> void:
+	if match_finished:
+		wins_red = 0
+		wins_blue = 0
+		score_red = 0
+		score_blue = 0
+		contributions.clear()
+		cooldown.clear()
+		match_finished = false
+		arena_live.call("update_players", players, contributions)
 	red_hp = 100.0
 	blue_hp = 100.0
 	red_shield = 0
@@ -265,20 +308,28 @@ func _next_round() -> void:
 	combat_tick = 0
 	intermission = 0
 	round_number += 1
+	arena_live.call("set_health", "red", 100.0)
+	arena_live.call("set_health", "blue", 100.0)
 	_log("Nouvelle manche : COMBAT !")
-
 func _join(user: String, team: String) -> void:
 	if team != "red" and team != "blue":
 		return
+	if players.has(user):
+		if str(players[user]) != team:
+			_log(user + " est deja dans une autre equipe")
+		return
 	players[user] = team
-	_log(user + " rejoint " + team.to_upper())
-
+	arena_live.call("update_players", players, contributions)
+	arena_live.call("reaction", team, "join")
+	_log(user + " entre dans l'arene " + team.to_upper() + " !")
 func _add_points(user: String, team: String, amount: int) -> void:
 	if team == "red":
 		score_red += amount
 	else:
 		score_blue += amount
 	contributions[user] = int(contributions.get(user, 0)) + amount
+	if arena_live != null:
+		arena_live.call("update_players", players, contributions)
 
 func _action(user: String, command: String) -> void:
 	var team: String = str(players.get(user, ""))
@@ -302,6 +353,7 @@ func _action(user: String, command: String) -> void:
 			else:
 				blue_shield = minf(40.0, blue_shield + 8)
 			_add_points(user, team, 1)
+			arena_live.call("reaction", team, "defend")
 			_log(user + " defend !")
 		"!heal":
 			if team == "red":
@@ -309,6 +361,7 @@ func _action(user: String, command: String) -> void:
 			else:
 				blue_hp = minf(100, blue_hp + 8)
 			_add_points(user, team, 1)
+			arena_live.call("reaction", team, "heal")
 			_log(user + " soigne !")
 
 func _gift(user: String, points: int, gift_name: String) -> void:
@@ -318,6 +371,7 @@ func _gift(user: String, points: int, gift_name: String) -> void:
 	var safe_points := clampi(points, 1, 1000)
 	_add_points(user, team, safe_points)
 	_damage("blue" if team == "red" else "red", minf(20.0, float(safe_points) * 0.6))
+	arena_live.call("reaction", team, "gift")
 	_log(user + " : " + gift_name + " +" + str(safe_points))
 
 func _chat(user: String, message: String) -> void:
@@ -337,7 +391,8 @@ func _handle_packet(raw: String) -> void:
 		return
 	var packet: Dictionary = parsed
 	if str(packet.get("type", "")) == "status":
-		_log(str(packet.get("message", "Passerelle connectee")))
+		bridge_state = str(packet.get("message", "Passerelle connectee"))
+		_log(bridge_state)
 		return
 	if str(packet.get("type", "")) != "event":
 		return
@@ -370,17 +425,17 @@ func _request_tiktok() -> void:
 	_log("Connexion demandee : @" + user)
 
 func _update_hud() -> void:
-	score_ui.text = "ROUGE %d   -   %d BLEU" % [score_red, score_blue]
-	health_ui.text = "PV %d / %d    DEF %d / %d" % [int(red_hp), int(blue_hp), int(red_shield), int(blue_shield)]
+	score_ui.text = "MANCHES  ROUGE %d  -  %d BLEU" % [wins_red, wins_blue]
+	health_ui.text = "CRISTAUX  %d PV  |  %d PV" % [int(red_hp), int(blue_hp)]
 	round_ui.text = "MANCHE %d | %02d s | %d ROUGES / %d BLEUS" % [round_number, int(maxf(0, round_time)), _members("red"), _members("blue")]
-	status_ui.text = "PASSERELLE CONNECTEE" if connected else "SIMULATION SANS RESEAU"
+	status_ui.text = bridge_state if connected else "AUTONOME • BOTS ACTIFS"
+	recruitment_ui.text = "REJOINS : !join red  /  !join blue  |  ATTAQUE : !attack"
 	var people: Array = contributions.keys()
 	people.sort_custom(func(a, b): return int(contributions[a]) > int(contributions[b]))
 	var leaders := PackedStringArray()
 	for i in range(mini(3, people.size())):
 		leaders.append(str(people[i]) + " " + str(contributions[people[i]]))
-	leaders_ui.text = "TOP : " + " | ".join(leaders) if not leaders.is_empty() else "TOP : aucun joueur"
-
+	leaders_ui.text = "TOP : " + " | ".join(leaders) if not leaders.is_empty() else "BOTS EN ACTION — SOIS LE PREMIER A REJOINDRE !"
 func _log(message: String) -> void:
 	if log_ui != null:
 		log_ui.text = message
