@@ -73,6 +73,15 @@ jobs:
           & $godot.FullName --headless --path rescue/game --script res://tests/agents_rules.gd
           if ($LASTEXITCODE -ne 0) { throw 'Agents de mission invalides' }
 
+      - name: Valider les personnages 3D et l'evacuation
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
+          & $godot.FullName --headless --path rescue/game --script res://tests/character_stage_qa.gd
+          if ($LASTEXITCODE -ne 0) { throw 'Recette personnages 3D invalide' }
+          & $godot.FullName --headless --path rescue/game --script res://tests/crowd_physics_rules.gd
+          if ($LASTEXITCODE -ne 0) { throw 'Collisions personnages invalides' }
+
       - name: Importer et exporter le jeu Windows
         run: |
           $ErrorActionPreference = 'Stop'
