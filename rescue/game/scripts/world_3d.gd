@@ -63,23 +63,23 @@ func set_live(is_live: bool) -> void:
 func _setup_environment() -> void:
 	var sky := Environment.new()
 	sky.background_mode = Environment.BG_COLOR
-	sky.background_color = Color("#95cadd")
+	sky.background_color = Color("#779eb3")
 	sky.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	sky.ambient_light_color = Color("#e1eff0")
-	sky.ambient_light_energy = 0.83
+	sky.ambient_light_color = Color("#c4d9db")
+	sky.ambient_light_energy = 0.63
 	var env := WorldEnvironment.new()
 	env.environment = sky
 	add_child(env)
 	sunlight = DirectionalLight3D.new()
 	sunlight.rotation_degrees = Vector3(-43, -42, -10)
 	sunlight.light_color = Color("#ffe5bd")
-	sunlight.light_energy = 1.65
+	sunlight.light_energy = 1.30
 	sunlight.shadow_enabled = true
 	add_child(sunlight)
 	camera = Camera3D.new()
 	camera.current = true
-	camera.fov = 69.0
-	camera.near = 0.1
+	camera.fov = 59.0
+	camera.near = 0.15
 	camera.far = 190.0
 	add_child(camera)
 	orbit_enabled = true
@@ -173,12 +173,12 @@ func _rebuild_world() -> void:
 	last_saved = 0
 	# Generous terrain so full orbit never reveals a void.
 	_box(terrain,Vector3(0,-2.4,0),Vector3(52,2.5,48),Color("#4b805d"))
-	_box(terrain,Vector3(-15.0,-0.85,0),Vector3(19,1.25,39),Color("#71a06a"))
-	_box(terrain,Vector3(15.0,-0.85,0),Vector3(19,1.25,39),Color("#6b9b66"))
+	_box(terrain,Vector3(-15.0,-0.85,0),Vector3(19,1.25,39),Color("#688e64"))
+	_box(terrain,Vector3(15.0,-0.85,0),Vector3(19,1.25,39),Color("#64895e"))
 	# Static collision banks do not depend on render visibility.
 	_collider(terrain,Vector3(-15.0,-0.85,0),Vector3(19,1.25,39))
 	_collider(terrain,Vector3(15.0,-0.85,0),Vector3(19,1.25,39))
-	water = _box(terrain,Vector3(0,-0.68,0),Vector3(11.5,0.18,42),Color("#257a98"))
+	water = _box(terrain,Vector3(0,-0.68,0),Vector3(11.5,0.18,42),Color("#286d83"))
 	# Riverbanks and rocks, with small irregular geometry.
 	for i in range(24):
 		var z := -18.0 + float(i)*1.6
@@ -671,9 +671,9 @@ func _process(delta: float) -> void:
 	surprise_time = maxf(0.0,surprise_time-d)
 	if orbit_enabled:
 		orbit_angle = fposmod(orbit_angle+d*TAU/39.0,TAU)
-	var radius := 25.0
-	var desired := Vector3(sin(orbit_angle)*radius,9.2+sin(clock*0.2)*0.4,cos(orbit_angle)*radius)
-	var target := Vector3(0,1.2,0)
+	var radius := 22.8
+	var desired := Vector3(sin(orbit_angle)*radius,10.3+sin(clock*0.2)*0.35,cos(orbit_angle)*radius)
+	var target := Vector3(0,1.85,0)
 	if spotlight_time > 0 and focus_user != "" and actors.has(focus_user):
 		var focus: Node3D = actors[focus_user]["rig"]
 		if is_instance_valid(focus):
