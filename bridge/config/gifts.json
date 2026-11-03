@@ -1,0 +1,17 @@
+{
+  "default_points": 1,
+  "gifts": {
+    "rose": {
+      "points": 3
+    },
+    "finger heart": {
+      "points": 5
+    },
+    "gg": {
+      "points": 10
+    },
+    "heart me": {
+      "points": 15
+    }
+  }
+}
