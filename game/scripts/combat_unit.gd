@@ -76,7 +76,7 @@ func initialize(side: String, slot: int, art: Node3D, start: Vector3, enemy_base
 	safe_margin = 0.02
 	art.reparent(self)
 	art.position = Vector3.ZERO
-	var original_sword := art.get_node_or_null("SwordVisual")
+	var original_sword: Node3D = art.get_node_or_null("SwordVisual") as Node3D
 	if original_sword:
 		original_sword.visible = false
 

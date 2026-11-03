@@ -39,7 +39,7 @@ func setup(arena_node: Node3D, champion_visuals: Array[Node3D]) -> void:
 	var sides := ["red", "blue"]
 	var lanes := [-3.0, -1.65, -0.70, 1.65, 3.0]
 	for side in sides:
-		var red := side == "red"
+		var red: bool = side == "red"
 		var start_x := -3.8 if red else 3.8
 		var base_x := 4.8 if red else -4.8
 		var target_base := Vector3(base_x, 0.0, 0.0)
@@ -63,7 +63,7 @@ func setup(arena_node: Node3D, champion_visuals: Array[Node3D]) -> void:
 	battle_notice.emit("ARMEE PRETE : 12 COMBATTANTS PHYSIQUES")
 
 func _make_crystal_sensor(side: String) -> void:
-	var red := side == "red"
+	var red: bool = side == "red"
 	var crystal := Area3D.new()
 	crystal.name = "CrystalHitbox_" + side
 	crystal.collision_layer = 4
@@ -98,8 +98,8 @@ func _physics_process(_delta: float) -> void:
 			for enemy in opponents:
 				if enemy.get("active") != true:
 					continue
-				var lane_penalty := absf(u.global_position.z - enemy.global_position.z) * 1.9
-				var distance := u.global_position.distance_to(enemy.global_position) + lane_penalty
+				var lane_penalty: float = absf(u.global_position.z - enemy.global_position.z) * 1.9
+				var distance: float = u.global_position.distance_to(enemy.global_position) + lane_penalty
 				if distance < best:
 					best = distance
 					nearest = enemy
