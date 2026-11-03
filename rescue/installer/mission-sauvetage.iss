@@ -1,5 +1,5 @@
 #define AppName "MISSION SAUVETAGE LIVE"
-#define AppVersion "0.1.0"
+#define AppVersion "0.2.0"
 [Setup]
 AppId={{EF938D1F-02A3-4EB2-9FA8-11204F8AA7CC}
 AppName={#AppName}

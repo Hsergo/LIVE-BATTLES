@@ -108,6 +108,7 @@ jobs:
           Copy-Item rescue/launcher/start.ps1 dist-rescue/launcher/start.ps1
           Copy-Item rescue/launcher/DEMARRER-MISSION-SAUVETAGE.cmd dist-rescue/DEMARRER-MISSION-SAUVETAGE.cmd
           Copy-Item rescue/README.md dist-rescue/README.md
+          Copy-Item rescue/docs/GUIDE_DEMARRAGE.md dist-rescue/GUIDE_DEMARRAGE.md
           Compress-Archive dist-rescue/* release-rescue/MISSION-SAUVETAGE-LIVE-Portable-x64.zip -Force
 
       - name: Installer Inno Setup
