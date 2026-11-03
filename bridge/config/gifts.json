@@ -1,17 +1,50 @@
 {
-  "default_points": 1,
+  "description": "Regles d'echange de cadeaux TikTok contre des ames de jeu. Les ames sont fictives, sans valeur monetaire ni remboursement.",
+  "default_points": 0,
   "gifts": {
     "rose": {
-      "points": 3
-    },
-    "finger heart": {
-      "points": 5
+      "souls": 1,
+      "label": "Rose"
     },
     "gg": {
-      "points": 10
+      "souls": 1,
+      "label": "GG"
     },
-    "heart me": {
-      "points": 15
+    "finger heart": {
+      "souls": 6,
+      "label": "Finger Heart"
+    },
+    "doughnut": {
+      "souls": 35,
+      "label": "Doughnut"
+    },
+    "donut": {
+      "souls": 35,
+      "label": "Doughnut"
+    },
+    "galaxy": {
+      "souls": 150,
+      "label": "Galaxy"
     }
-  }
+  },
+  "powers": [
+    {
+      "cost": 10,
+      "id": "flamme",
+      "label": "FLAMME",
+      "effect": "Accelerer les coups a l'epee"
+    },
+    {
+      "cost": 35,
+      "id": "bouclier",
+      "label": "BOUCLIER",
+      "effect": "Renforcer les parades et les soins"
+    },
+    {
+      "cost": 120,
+      "id": "tempete",
+      "label": "TEMPETE",
+      "effect": "Charge offensive temporaire"
+    }
+  ]
 }

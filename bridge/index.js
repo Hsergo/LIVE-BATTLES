@@ -47,14 +47,17 @@ function chat(username, content, id = null) {
   event({ event: 'chat', user: who, text: String(content).trim().toLowerCase() }, id);
 }
 function gift(username, title, count, id = null) {
-  const points = Math.min(1000, giftPoints(title, config, count));
+  const points = Math.min(3000, giftPoints(title, config, count));
+  if (points <= 0) return false;
   event({
     event: 'gift',
     user: sanitizedUsername(username),
     gift_name: String(title).slice(0, 64),
     count: Number(count) || 1,
-    points
+    points,
+    resource: 'souls'
   }, id);
+  return true;
 }
 function simulate(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return false;
@@ -64,8 +67,7 @@ function simulate(input) {
       chat(user, input.text || '');
       return true;
     case 'gift':
-      gift(user, input.gift_name || 'Rose', input.count || 1);
-      return true;
+      return gift(user, input.gift_name || 'Rose', input.count || 1);
     case 'like':
       event({ event: 'like', user, count: Math.min(10000, Math.max(1, Number(input.count) || 1)) });
       return true;
@@ -121,15 +123,15 @@ async function connectTikTok(userValue) {
   active.on('gift', e => {
     if (!shouldCountGift(e)) return;
     gift(
-      e.uniqueId || e.nickname,
-      e.gift?.name || e.gift?.giftDetails?.giftName || e.giftName || 'Cadeau',
+      e.user?.uniqueId || e.uniqueId || e.user?.nickname || e.nickname,
+      e.giftDetails?.giftName || e.gift?.giftDetails?.giftName || e.gift?.name || e.giftName || 'Cadeau',
       e.repeatCount || e.repeat_count || 1,
       (e.common?.msgId || e.msgId) ? String(e.common?.msgId || e.msgId) : null
     );
   });
   active.on('like', e => event({
     event: 'like',
-    user: sanitizedUsername(e.uniqueId || e.nickname),
+    user: sanitizedUsername(e.user?.uniqueId || e.uniqueId || e.user?.nickname || e.nickname),
     count: Number(e.likeCount || e.count) || 1
   }));
   active.on('social', e => {
