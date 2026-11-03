@@ -43,23 +43,34 @@ jobs:
           New-Item -ItemType Directory -Force $target | Out-Null
           Copy-Item tools/templates/templates/* $target -Recurse -Force
 
-      - name: Exporter le jeu Godot
+      - name: Importer et exporter le jeu Godot
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $godot = Get-ChildItem tools/godot -Recurse -Filter 'Godot*_win64.exe' | Select-Object -First 1
-          if (-not $godot) { throw 'Executable Godot absent' }
-          $exe = $godot.FullName
+          $console = Get-ChildItem tools/godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
+          if ($console) {
+            $exe = $console.FullName
+          } else {
+            $gui = Get-ChildItem tools/godot -Recurse -Filter 'Godot*_win64.exe' | Select-Object -First 1
+            if (-not $gui) { throw 'Executable Godot absent' }
+            $exe = $gui.FullName
+          }
+          Write-Host "Godot: $exe"
+          $project = (Resolve-Path game).Path
           New-Item -ItemType Directory -Force dist/game | Out-Null
-          & $exe --headless --path game --editor --quit
-          if ($LASTEXITCODE -ne 0) { throw 'Import Godot echoue' }
-          & $exe --headless --path game --export-release 'Windows Desktop' (Join-Path $PWD 'dist/game/LiveBattle.exe')
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path dist/game/LiveBattle.exe)) {
-            throw 'Export Godot echoue'
+          Write-Host 'Import des ressources Godot...'
+          & $exe --headless --path $project --import --verbose
+          $importExit = $LASTEXITCODE
+          if ($importExit -ne 0) {
+            Write-Warning "Import Godot a renvoye $importExit ; l export va fournir un diagnostic complementaire."
           }
-          if (-not (Test-Path dist/game/LiveBattle.pck)) {
-            Write-Host 'L export peut embarquer le .pck selon la configuration.'
+          Write-Host 'Export Windows...'
+          & $exe --headless --path $project --export-release 'Windows Desktop' (Join-Path $PWD 'dist/game/LiveBattle.exe') --verbose
+          $exportExit = $LASTEXITCODE
+          if ($exportExit -ne 0 -or -not (Test-Path dist/game/LiveBattle.exe)) {
+            throw "Export Godot echoue, code $exportExit"
           }
+          Write-Host 'Export du jeu Windows reussi.'
 
       - name: Packager la version autonome
         shell: pwsh
