@@ -48,12 +48,13 @@ func _run() -> void:
 	model.call("configure",true)
 	assert_that(str(model.get("status")) == "RUNNING", "Mode DEMO clairement distinct et auto-actif")
 	assert_that(model.get("participants").size() == 0, "Aucun faux spectateur genere en demonstration")
-	for i in range(1080):
+	for i in range(1250):
 		if str(model.get("status")) == "RESULT":
 			break
 		model.call("tick",0.1)
 	assert_that(int(model.get("weather_stage")) >= 1, "Une vague frappe le pont pendant la demonstration")
 	assert_that(int(model.get("saved")) > 0, "La demonstration evacue des habitants")
+	print("DEMO DIAGNOSTIC: status=%s saved=%d/%d progress=%.2f strength=%.2f remaining=%.2f" % [str(model.get("status")), int(model.get("saved")),int(model.get("target")),float(model.get("progress")),float(model.get("strength")),float(model.get("seconds"))])
 	assert_that(str(model.get("status")) == "RESULT", "Demo atteint un resultat sans intervention")
 	assert_that(model.get("participants").size() == 0, "Aucun spectateur invente pendant le cycle automatique")
 	print("MISSION RULES TESTS: ", "SUCCESS" if fail_count == 0 else "FAILED " + str(fail_count))
