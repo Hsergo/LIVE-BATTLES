@@ -275,6 +275,9 @@ func sync(delta: float) -> void:
 		var rig: Node3D = actor["node"]
 		var phase := "waiting"
 		var target := _waiting_position(idx)
+		# Background NPCs move within the assembly point, not stand frozen.
+		var idle_drift := Vector3(sin(time*0.42+float(idx)*1.4)*0.19,0.0,cos(time*0.35+float(idx))*0.18)
+		target += idle_drift
 		var walk := false
 		if crossing.has(idx):
 			var entry: Dictionary = crossing[idx]
@@ -288,6 +291,7 @@ func sync(delta: float) -> void:
 			walk = rig.position.distance_to(target)>0.18
 		else:
 			count_waiting += 1
+			walk = rig.position.distance_to(target) > 0.12
 		var previous_phase := str(actor.get("phase","waiting"))
 		if phase == "crossing" and previous_phase != "crossing":
 			rescue_started[idx] = time

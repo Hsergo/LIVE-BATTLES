@@ -632,7 +632,7 @@ func _animate_workers(delta: float) -> void:
 		if action_tag.visible:
 			action_tag.position.y = 3.16+sin(t*3.4)*0.08
 		var slot_pos := _worker_position(int(actor["slot"]))
-		var target := slot_pos + Vector3(0,0.0,sin(t*0.5+float(actor["slot"]))*0.16)
+		var target := slot_pos + Vector3(sin(t*0.65+float(actor["slot"]))*0.13,0.0,cos(t*0.42+float(actor["slot"]))*0.15)
 		if remaining > 0.0:
 			var site := str(state.call("scenario_info").get("site_type"))
 			var lane := float(int(actor["slot"])%7)
@@ -652,7 +652,9 @@ func _animate_workers(delta: float) -> void:
 			elif site == "helipad":
 				target = Vector3(-5.4,0.16,lane*0.55-1.7)
 			else:
-				target = Vector3(work_x-1.1,0.18,lane*0.53-1.8)
+				# Operate construction from a camera-visible bank staging lane.
+				# Avoid walking into the river through nonexistent deck panels.
+				target = Vector3(-8.65+float(int(actor["slot"])%4)*0.46,0.17,lane*0.47-1.62)
 		var moved: Vector3 = rig.call("move_to",target,5.7 if remaining > 0.0 else 2.9,delta)
 		var visual: Node3D = actor["visual"]
 		visual.position.y = 0.018*sin(t*7.2) if remaining > 0.0 else 0.005*sin(t*1.3)
