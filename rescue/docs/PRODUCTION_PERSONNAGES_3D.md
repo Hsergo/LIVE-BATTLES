@@ -53,3 +53,53 @@ Principaux défauts observés :
 ## Prochaine étape artistique
 
 Faire valider les personnages et le parcours d'évacuation sur trois angles (plan large, caméra rapprochée sur l'ouvrier actif, suivi d'un villageois). Ensuite seulement, décider de l'import de personnages glTF supplémentaires sous licences adaptées et de la préparation du premier export d'intégration.
+
+
+## Production suivante : chorégraphie des sauvetages (source intégrée)
+
+Ce lot complète le premier travail sur les personnages. Il ne déclenche aucune compilation.
+
+### Parcours et véhicules distincts
+
+| Terrain | Route matérialisée dans le moteur | Arrivée |
+|---|---|---|
+| Pont | Rassemblement, accès au tablier, traversée, rampe, poste médical | Marche et escorte par l'ouvrier du spectateur |
+| Digue | Quai de rassemblement, embarquement, traversée en ferry, quai opposé | Refuge installé sur la rive du débarquement |
+| Barrage | Quai de secours éloigné des vannes, bateau de traversée | Refuge sur la rive protégée |
+| Phare | Embarquement en bateau, navigation, débarquement | Poste de secours du port |
+| Héliport | Approche de l'aire, embarquement, vol et dépose au refuge | Zone médicale et hélicoptère suivi par la caméra |
+
+Les trajectoires passent par le module réutilisable `rescue_routes_3d.gd`. Le moteur des villageois et le moteur des véhicules utilisent les **mêmes positions et les mêmes étapes**, au lieu de deux animations indépendantes susceptibles de se décaler.
+
+### Attribution nominative du résultat
+
+Une commande `!rescue` acceptée ajoute le vrai pseudo du spectateur à la file d'embarquement. L'entrée en transit conserve ce pseudo ainsi que l'identifiant stable du villageois ; lorsque la personne arrive réellement en sécurité dans la simulation, le même spectateur reçoit des points de sauvetage supplémentaires et un événement visible. Une action refusée car le chantier est incomplet ou déjà à 100 % n'augmente pas artificiellement les points de construction.
+
+L'ouvrier qui a initié l'évacuation accompagne son villageois sur les missions de pont ; pour les missions maritimes ou aériennes, il se rend au quai ou à l'aire d'embarquement. Aucun villageois n'est présenté comme un compte TikTok.
+
+### Effets et lisibilité
+
+- Réorganisation de la zone des ouvriers pour ne pas les confondre avec la file des civils.
+- Socle des rives relevé pour que les pieds soient proches du terrain visible.
+- Quai, ferry, zone médicale, hélicoptère et effets visuels synchronisés au déplacement.
+- Effets de construction, réparation et arrivée en sécurité plafonnés à **64 petites particules**.
+- Environnement météo différencié : pluie, neige et braises selon le scénario.
+- Caméra 360 conservée ; suivi temporaire de la personne en cours d'évacuation.
+- Les passagers ont une collision neutralisée pendant le transport, puis restaurée au débarquement.
+
+### Fichiers de cette phase
+
+- `rescue/game/scripts/rescue_routes_3d.gd` — positions et phases d'évacuation.
+- `rescue/game/scripts/villagers_3d.gd` — animation physique, embarquement, arrivé.
+- `rescue/game/scripts/world_3d.gd` — bateaux, aéronef, escorte et caméra.
+- `rescue/game/scripts/mission.gd` — propriétaire de l'évacuation et points réellement gagnés.
+- `rescue/game/tests/rescue_routes_qa.gd` — tests prévus de tous les types de trajets.
+- `rescue/game/tests/rescue_choreography_qa.gd` — tests prévus des escortes, du chat et des arrivées.
+
+### État exact et dernière validation nécessaire
+
+**Modifié dans le dépôt : oui. Tests source de cohérence : prévus. Tests d'exécution Godot : non encore lancés. Compilateur et export Windows : non déclenchés.**
+
+La prochaine étape de recette exige l'import des ressources du moteur, les tests de physiques/animations et un contrôle visuel sur Windows, plus l'essai auprès du vrai créateur TikTok. Il faudra aussi confirmer que les modèles humains riggés sous licence sont visibles dans les trois situations de caméra et que 48 ouvriers restent fluides sur le PC cible.
+
+Ne pas présenter cette phase comme un jeu photoréaliste terminé : les modèles restent mixtes (riggés et procéduraux) et les mouvements ne sont pas issus de mocap professionnelle.
