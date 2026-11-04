@@ -43,7 +43,8 @@ func setup(game: RefCounted, scene_type: String) -> void:
 		crowd.append(_create_civilian(idx))
 	var waiting_title := "EQUIPAGES EN ATTENTE" if scene_type == "lighthouse" else ("PERSONNES A EVACUER" if scene_type == "helipad" else "VILLAGEOIS EN ATTENTE")
 	waiting_sign = _sign(waiting_title,Vector3(-13.3,4.5,-1.9),Color("#ffecd0"))
-	safe_sign = _sign("ZONE DE REFUGE",Vector3(13.3,4.5,-1.9),Color("#a8ffe0"))
+	var shelter_pos := Vector3(12.8,3.8,11.2) if scene_type in ["dike","dam"] else Vector3(12.8,3.8,-4.6)
+	safe_sign = _sign("ZONE DE REFUGE",shelter_pos,Color("#a8ffe0"))
 	sync(0.0)
 
 func _material(tint: Color) -> StandardMaterial3D:
@@ -218,8 +219,8 @@ func _safe_position(index: int) -> Vector3:
 	var col := index%6
 	# The safe zone is next to the actual 3D triage camp, never in a river.
 	if site_type in ["dike","dam"]:
-		return Vector3(10.8+float(col)*0.50,0.14,8.4+float(row)*0.76)
-	return Vector3(11.3+float(col)*0.52,0.14,-6.8+float(row)*0.75)
+		return Vector3(10.8+float(col)*0.50,0.14,11.5+float(row)*0.76)
+	return Vector3(11.3+float(col)*0.52,0.14,-4.25+float(row)*0.75)
 
 func _interpolate(a: Vector3,b: Vector3,p: float) -> Vector3:
 	return a.lerp(b,clampf(p,0.0,1.0))
@@ -286,6 +287,7 @@ func sync(delta: float) -> void:
 		# avoids a phantom walk through a dam wall or aircraft while aboard.
 		var body := rig as CharacterBody3D
 		body.collision_mask = 0 if is_passenger else 3
+		body.collision_layer = 0 if is_passenger else 2
 		var move_speed := 8.5 if is_passenger else (walking_speed if walk else 2.4)
 		var movement: Vector3 = rig.call("move_to",target,move_speed,d)
 		if movement.length_squared()>0.00003 and walk:

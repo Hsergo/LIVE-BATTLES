@@ -825,7 +825,7 @@ func _build_rescue_camps() -> void:
 	var waiting_camp := Node3D.new()
 	waiting_camp.name = "EvacuationAssemblyPoint"
 	terrain.add_child(waiting_camp)
-	waiting_camp.position = Vector3(-14.2,0.10,-8.0)
+	waiting_camp.position = Vector3(-13.5,0.10,-2.3)
 	_box(waiting_camp,Vector3(0,0.12,0),Vector3(5.7,0.18,4.3),Color("#acb39d"))
 	for x in [-2.0,2.0]:
 		_cylinder(waiting_camp,Vector3(x,0.85,1.82),0.06,1.55,Color("#deb875"))

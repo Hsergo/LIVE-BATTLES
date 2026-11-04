@@ -10,19 +10,19 @@ static func _points(scene: String, start: Vector3, refuge: Vector3, lane: int) -
 	match scene:
 		"bridge":
 			return [start,Vector3(-8.8,0.15,z),Vector3(-7.0,1.33,z),
-				Vector3(7.0,1.33,z),Vector3(8.8,0.15,z),refuge]
+				Vector3(7.0,1.33,z),Vector3(8.8,0.15,-1.5+float(clampi(lane,0,2))*0.4),refuge]
 		"dike","dam":
 			z = 9.0+lane_offset*0.69
 			return [start,Vector3(-7.1,0.12,z),Vector3(-5.35,0.43,z),
-				Vector3(5.35,0.43,z),Vector3(7.0,0.12,z),refuge]
+				Vector3(5.35,0.43,z),Vector3(7.0,0.12,z+1.4),refuge]
 		"lighthouse":
 			z = 2.4+lane_offset*0.69
 			return [start,Vector3(-7.0,0.15,z),Vector3(-5.35,0.43,z),
-				Vector3(5.35,0.43,z),Vector3(7.0,0.15,z),refuge]
+				Vector3(5.35,0.43,z),Vector3(9.0,0.15,-1.5),refuge]
 		"helipad":
 			z = 3.15+lane_offset*0.34
 			return [start,Vector3(-4.4,0.15,z),Vector3(-1.9,1.55,z),
-				Vector3(9.0,4.4,z),Vector3(11.2,0.45,z),refuge]
+				Vector3(9.0,4.4,z),Vector3(11.2,0.45,-1.8),refuge]
 	return [start,Vector3(-8.0,0.15,z),Vector3(-5.9,0.5,z),
 		Vector3(5.9,0.5,z),Vector3(8.0,0.15,z),refuge]
 
