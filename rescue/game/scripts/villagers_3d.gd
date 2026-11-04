@@ -359,6 +359,13 @@ func transit_details() -> Array[Dictionary]:
 				"position":npc.position})
 	return result
 
+func evacuee_position(person_index: int) -> Vector3:
+	if person_index >= 0 and person_index < crowd.size():
+		var npc: Node3D = crowd[person_index]["node"]
+		if is_instance_valid(npc):
+			return npc.position
+	return Vector3(-8.0,0.15,0.0)
+
 func first_in_transit_position() -> Vector3:
 	for actor in crowd:
 		if str(actor.get("phase","")) == "crossing":
