@@ -94,6 +94,15 @@ jobs:
           & $godot.FullName --headless --path rescue/game --script res://tests/crowd_physics_rules.gd
           if ($LASTEXITCODE -ne 0) { throw 'Collisions personnages invalides' }
 
+      - name: Recette des embarquements, escorts et publics nombreux
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
+          & $godot.FullName --headless --path rescue/game --script res://tests/rescue_choreography_qa.gd
+          if ($LASTEXITCODE -ne 0) { throw 'Evacuation et attribution des points invalides' }
+          & $godot.FullName --headless --path rescue/game --script res://tests/rescue_routes_qa.gd
+          if ($LASTEXITCODE -ne 0) { throw 'Routes d evacuation invalides' }
+
       - name: Tester la scene et l'interaction locale
         run: |
           $ErrorActionPreference = 'Stop'
