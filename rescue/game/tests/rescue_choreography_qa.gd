@@ -37,8 +37,8 @@ func _run() -> void:
 	if not crowd.is_empty():
 		check(str(crowd[0]["status_tag"].text)=="EN ROUTE","Village resident displays travel stage")
 	if not crossings.is_empty():
-		var pass: Dictionary = crossings[0]
-		pass["p"] = 0.99
+		var rescued_entry: Dictionary = crossings[0]
+		rescued_entry["p"] = 0.99
 		model.call("tick",0.1)
 		civilians.call("sync",0.1)
 		check(int(model.get("saved"))==1,"Arrival increments the rescue score")
