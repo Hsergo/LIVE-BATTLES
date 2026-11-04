@@ -29,6 +29,7 @@ var wood := 30.0
 var saved := 0
 var target := 12
 var rescue_queue := 0
+var rescue_owners: Array[String] = []
 var next_villager_index := 0
 var crossings: Array[Dictionary] = []
 var participants: Dictionary = {}
@@ -90,6 +91,7 @@ func _start_mission(reset_people: bool) -> void:
 	saved = 0
 	target = int(SCENARIOS[scenario_index]["target"])
 	rescue_queue = 0
+	rescue_owners.clear()
 	next_villager_index = 0
 	crossings.clear()
 	votes = {"1":0, "2":0, "3":0}
@@ -217,12 +219,19 @@ func rescue(user: String) -> bool:
 		return false
 	if saved + rescue_queue + crossings.size() >= target:
 		return false
-	rescue_queue += 1
+	_enqueue_rescue(user,1)
 	_credit(user,7)
 	if participants.has(user):
 		rescuer_points[user] = int(rescuer_points.get(user,0)) + 7
 	_note("@" + user + " LANCE UN SAUVETAGE !", "rescue", user)
 	return true
+
+func _enqueue_rescue(user: String, count: int) -> void:
+	var remaining := maxi(0,target-saved-rescue_queue-crossings.size())
+	var accepted := mini(maxi(0,count),remaining)
+	for n in range(accepted):
+		rescue_owners.append(user)
+	rescue_queue += accepted
 
 func special(user: String) -> bool:
 	# Each type has its own free cooperative emergency action; gifts provide
@@ -237,7 +246,7 @@ func special(user: String) -> bool:
 				gain = 5.0
 				progress = minf(100.0,progress+gain)
 			elif saved + rescue_queue + crossings.size() < target:
-				rescue_queue += 1
+				_enqueue_rescue(user,1)
 			strength = minf(100.0,strength+4.0)
 		"dike":
 			strength = minf(100.0,strength+10.0)
@@ -247,7 +256,7 @@ func special(user: String) -> bool:
 			if progress < 99.9:
 				progress = minf(100.0,progress+5.0)
 			elif saved + rescue_queue + crossings.size() < target:
-				rescue_queue += 1
+				_enqueue_rescue(user,1)
 			protection_seconds = maxf(protection_seconds,7.0)
 		"dam":
 			strength = minf(100.0,strength+12.0)
@@ -256,7 +265,7 @@ func special(user: String) -> bool:
 			if progress < 99.9:
 				progress = minf(100.0,progress+5.0)
 			else:
-				rescue_queue += mini(2,maxi(0,target-saved-rescue_queue-crossings.size()))
+				_enqueue_rescue(user,2)
 			protection_seconds = maxf(protection_seconds,4.0)
 	_credit(user,8)
 	if participants.has(user):
@@ -282,7 +291,7 @@ func vote(user: String, option: String) -> bool:
 				progress = minf(100.0,progress+10.0)
 				_note("CHOIX COLLECTIF : GRUE RAPIDE", "success")
 			"3":
-				rescue_queue += mini(2,maxi(0,target-saved-rescue_queue-crossings.size()))
+				_enqueue_rescue(user,2)
 				_note("CHOIX COLLECTIF : EVACUATION PRIORITAIRE", "success")
 		votes[option] = 0
 	return true
@@ -362,8 +371,10 @@ func tick(delta: float) -> void:
 		_tick_demo()
 	if rescue_queue > 0 and crossings.size() < 4 and progress >= 99.9 and strength >= 20.0:
 		rescue_queue -= 1
+		var owner := rescue_owners.pop_front() if not rescue_owners.is_empty() else ""
 		crossings.append({"p":0.0,"speed":0.16+randf_range(-0.013,0.013),
-			"lane":randi_range(0,2),"person_index":next_villager_index})
+			"lane":randi_range(0,2),"person_index":next_villager_index,
+			"rescuer":owner})
 		next_villager_index += 1
 	for crossing in crossings.duplicate():
 		# A destroyed or severely damaged construction temporarily stops evacuation
@@ -375,7 +386,14 @@ func tick(delta: float) -> void:
 			crossings.erase(crossing)
 			saved += 1
 			strength = maxf(0.0,strength-0.6)
-			_note(("1 BATEAU GUIDE !" if str(SCENARIOS[scenario_index]["site_type"]) == "lighthouse" else "1 HABITANT SAUVE !") + " " + str(saved) + "/" + str(target), "success")
+			var rescuer := str(crossing.get("rescuer",""))
+			if participants.has(rescuer):
+				rescuer_points[rescuer] = int(rescuer_points.get(rescuer,0)) + 12
+				_credit(rescuer,12)
+			var outcome := "1 NAVIRE GUIDE" if str(SCENARIOS[scenario_index]["site_type"]) == "lighthouse" else "1 VILLAGEOIS SAUVE"
+			if not rescuer.is_empty() and participants.has(rescuer):
+				outcome = "@" + rescuer.substr(0,18) + " • " + outcome
+			_note(outcome + " " + str(saved) + "/" + str(target), "success", rescuer)
 	if saved >= target:
 		_finish(true)
 	elif strength <= 0.0 or seconds <= 0.0:
