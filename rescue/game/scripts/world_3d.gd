@@ -887,9 +887,13 @@ func _build_environment_details() -> void:
 		var z := randf_range(-18.5,18.5)
 		var ripple := _box(terrain,Vector3(x,-0.50,z),Vector3(randf_range(0.45,1.5),0.025,0.06),Color("#90d5dc"))
 		water_foam.append(ripple)
+	var hazard := str(state.call("scenario_info").get("hazard_kind"))
+	var blizzard := hazard=="blizzard"
+	var fire := hazard=="incendie"
 	for i in range(34):
-		var streak := _box(terrain,Vector3(randf_range(-22,22),randf_range(2.0,11.0),randf_range(-18,18)),
-			Vector3(0.022,randf_range(0.42,1.1),0.022),Color("#a9dce8"))
+		var tint := Color("#eaf1f4") if blizzard else (Color("#f6ac6a") if fire else Color("#a9dce8"))
+		var size := Vector3(0.085,0.10,0.085) if blizzard else (Vector3(0.11,0.18,0.11) if fire else Vector3(0.022,randf_range(0.42,1.1),0.022))
+		var streak := _box(terrain,Vector3(randf_range(-22,22),randf_range(2.0,11.0),randf_range(-18,18)),size,tint)
 		streak.visible = false
 		rain.append(streak)
 	light_refuge = OmniLight3D.new()
@@ -902,6 +906,9 @@ func _build_environment_details() -> void:
 func _animate_environment(delta: float) -> void:
 	var stage := int(state.get("weather_stage"))
 	var flood := float(state.get("flood_level"))
+	var hazard_kind := str(state.call("scenario_info").get("hazard_kind"))
+	var snowing := hazard_kind=="blizzard"
+	var burning := hazard_kind=="incendie"
 	for i in range(water_foam.size()):
 		var wave: MeshInstance3D = water_foam[i]
 		var pos := wave.position
@@ -914,10 +921,13 @@ func _animate_environment(delta: float) -> void:
 		var drop: MeshInstance3D = rain[i]
 		drop.visible = stage > 0
 		if stage > 0:
-			drop.position.y -= delta*(6.5+float(i%7)+float(stage)*1.9)
-			drop.position.x += delta*(1.0+float(stage)*1.7)
-			if drop.position.y < 0.8 or drop.position.x > 26.0:
-				drop.position = Vector3(randf_range(-20.0,20.0),randf_range(9.0,15.0),randf_range(-17.0,17.0))
+			var vertical_speed := (2.2 if snowing else (4.8 if burning else 6.5+float(i%7)+float(stage)*1.9))
+			drop.position.y += delta*vertical_speed if burning else -delta*vertical_speed
+			drop.position.x += delta*(0.8 if snowing else 1.0+float(stage)*1.7)
+			var reset := drop.position.y > 14.0 if burning else drop.position.y < 0.8
+			if reset or drop.position.x > 26.0:
+				var spawn_height := randf_range(0.2,1.5) if burning else randf_range(9.0,15.0)
+				drop.position = Vector3(randf_range(-20.0,20.0),spawn_height,randf_range(-17.0,17.0))
 	if light_refuge != null:
 		light_refuge.light_energy = 1.15+0.13*sin(clock*1.8)
 	if rescue_rotor != null and is_instance_valid(rescue_rotor):
