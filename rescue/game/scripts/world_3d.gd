@@ -182,11 +182,11 @@ func _rebuild_world() -> void:
 	last_saved = 0
 	# Generous terrain so full orbit never reveals a void.
 	_box(terrain,Vector3(0,-2.4,0),Vector3(52,2.5,48),Color("#4b805d"))
-	_box(terrain,Vector3(-15.0,-0.85,0),Vector3(19,1.25,39),Color("#688e64"))
-	_box(terrain,Vector3(15.0,-0.85,0),Vector3(19,1.25,39),Color("#64895e"))
+	_box(terrain,Vector3(-15.0,-0.55,0),Vector3(19,1.25,39),Color("#688e64"))
+	_box(terrain,Vector3(15.0,-0.55,0),Vector3(19,1.25,39),Color("#64895e"))
 	# Static collision banks do not depend on render visibility.
-	_collider(terrain,Vector3(-15.0,-0.85,0),Vector3(19,1.25,39))
-	_collider(terrain,Vector3(15.0,-0.85,0),Vector3(19,1.25,39))
+	_collider(terrain,Vector3(-15.0,-0.55,0),Vector3(19,1.25,39))
+	_collider(terrain,Vector3(15.0,-0.55,0),Vector3(19,1.25,39))
 	water = _box(terrain,Vector3(0,-0.68,0),Vector3(11.5,0.18,42),Color("#286d83"))
 	# Riverbanks and rocks, with small irregular geometry.
 	for i in range(24):
@@ -544,12 +544,10 @@ func _worker(name: String) -> Dictionary:
 	return limbs
 
 func _worker_position(slot: int) -> Vector3:
-	# Group the team inside the camera's readable area instead of far away.
-	var row := int(slot / 8)
-	var col := slot % 8
-	var x := -12.4 + float(col)*0.84
-	var z := -2.85 + float(row)*0.90
-	return Vector3(x,0.16,z)
+	# Keep the crew on the west bank, separate from the civilians' shelter.
+	var row := int(slot / 6)
+	var col := slot % 6
+	return Vector3(-10.25+float(col)*0.71,0.13,-6.4+float(row)*1.55)
 
 func _sync_workers() -> void:
 	if state == null:
@@ -671,7 +669,7 @@ func _animate_workers(delta: float) -> void:
 				if site == "bridge" and not escort.is_empty() and civilians != null:
 					var person_index := int(escort.get("person_index",-1))
 					var civilian_pos: Vector3 = civilians.call("evacuee_position",person_index)
-					target = civilian_pos+Vector3(-0.90,0.0,-0.72)
+					target = civilian_pos+Vector3(-0.70,0.0,0.43)
 				elif site in ["dike","dam"]:
 					target = Vector3(-7.3,0.16,9.0+float(int(actor["slot"])%3)*0.69)
 				elif site == "lighthouse":
@@ -864,7 +862,7 @@ func _build_rescue_camps() -> void:
 	waiting_camp.name = "EvacuationAssemblyPoint"
 	terrain.add_child(waiting_camp)
 	waiting_camp.position = Vector3(-13.5,0.10,-2.3)
-	_box(waiting_camp,Vector3(0,0.12,0),Vector3(5.7,0.18,4.3),Color("#acb39d"))
+	_box(waiting_camp,Vector3(0,-0.035,0),Vector3(5.7,0.09,4.3),Color("#acb39d"))
 	for x in [-2.0,2.0]:
 		_cylinder(waiting_camp,Vector3(x,0.85,1.82),0.06,1.55,Color("#deb875"))
 	_box(waiting_camp,Vector3(0,1.25,1.80),Vector3(4.35,0.11,0.12),Color("#e9cc84"))
