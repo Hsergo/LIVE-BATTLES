@@ -181,6 +181,9 @@ func receive(user: String, command: String) -> bool:
 	return false
 
 func build(user: String) -> bool:
+	if progress >= 99.9:
+		_note("CHANTIER TERMINE • UTILISE !rescue", "hint", user)
+		return false
 	if not _eligible(user,"build",BUILD_COOLDOWN):
 		return false
 	var gain := 2.5
@@ -195,6 +198,9 @@ func build(user: String) -> bool:
 	return true
 
 func repair(user: String) -> bool:
+	if strength >= 99.99:
+		_note("STRUCTURE DEJA REPAREE • !rescue", "hint", user)
+		return false
 	if not _eligible(user,"repair",REPAIR_COOLDOWN):
 		return false
 	var gain := 3.0
@@ -209,8 +215,6 @@ func repair(user: String) -> bool:
 	return true
 
 func rescue(user: String) -> bool:
-	if not _eligible(user,"rescue",RESCUE_COOLDOWN):
-		return false
 	if progress < 99.9:
 		_note(str(SCENARIOS[scenario_index]["site"]) + " INACHEVE • !build", "warning")
 		return false
@@ -218,6 +222,8 @@ func rescue(user: String) -> bool:
 		_note(str(SCENARIOS[scenario_index]["site"]) + " FRAGILE • !repair", "warning")
 		return false
 	if saved + rescue_queue + crossings.size() >= target:
+		return false
+	if not _eligible(user,"rescue",RESCUE_COOLDOWN):
 		return false
 	_enqueue_rescue(user,1)
 	_credit(user,7)
@@ -369,7 +375,8 @@ func tick(delta: float) -> void:
 		_note("ALERTE %d/3 • %s !" % [next_disaster, str(SCENARIOS[scenario_index]["event_text"])], "danger")
 	if demo_mode:
 		_tick_demo()
-	if rescue_queue > 0 and crossings.size() < 4 and progress >= 99.9 and strength >= 20.0:
+	var max_simultaneous := 1 if str(SCENARIOS[scenario_index]["site_type"])=="helipad" else 4
+	if rescue_queue > 0 and crossings.size() < max_simultaneous and progress >= 99.9 and strength >= 20.0:
 		rescue_queue -= 1
 		var owner := rescue_owners.pop_front() if not rescue_owners.is_empty() else ""
 		crossings.append({"p":0.0,"speed":0.16+randf_range(-0.013,0.013),

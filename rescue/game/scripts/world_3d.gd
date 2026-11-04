@@ -601,7 +601,7 @@ func record_event(event: Dictionary) -> void:
 	if not actors.has(name):
 		return
 	var actor: Dictionary = actors[name]
-	actor["action_time"] = 3.5
+	actor["action_time"] = 8.0 if kind=="rescue" else 3.5
 	actor["action"] = kind
 	var action_tag: Label3D = actor["action_tag"]
 	action_tag.visible = kind != "join"
@@ -637,6 +637,14 @@ func _animate_workers(delta: float) -> void:
 		actor["age"] = float(actor["age"])+delta
 		var t := float(actor["age"])
 		var remaining := maxf(0,float(actor["action_time"])-delta)
+		var escort: Dictionary = {}
+		if str(actor["action"]) == "rescue" and live_mode:
+			for passenger in state.get("crossings"):
+				if str(passenger.get("rescuer","")) == str(user):
+					escort = passenger
+					break
+		if not escort.is_empty():
+			remaining = maxf(remaining,0.9)
 		actor["action_time"] = remaining
 		var tool: Node3D = actor["tool"]
 		tool.visible = remaining > 0.0 and str(actor["action"]) in ["build","repair"] and not actor.has("avatar")
@@ -653,13 +661,20 @@ func _animate_workers(delta: float) -> void:
 			var lane := float(int(actor["slot"])%7)
 			var work_x := -6.7+float(int(float(state.get("progress"))/100.0*14.0))
 			if str(actor["action"]) == "rescue":
-				# The viewer's rescuer physically escorts civilians from the danger zone.
-				if site == "lighthouse":
-					target = Vector3(-6.5,0.18,2.2+lane*0.34)
+				# The user's builder accompanies THEIR villager, not a random NPC.
+				# At docks/helipads, the escort stays near boarding facilities.
+				if site == "bridge" and not escort.is_empty() and civilians != null:
+					var person_index := int(escort.get("person_index",-1))
+					var civilian_pos: Vector3 = civilians.call("evacuee_position",person_index)
+					target = civilian_pos+Vector3(-0.90,0.0,-0.72)
+				elif site in ["dike","dam"]:
+					target = Vector3(-7.3,0.16,9.0+float(int(actor["slot"])%3)*0.69)
+				elif site == "lighthouse":
+					target = Vector3(-7.3,0.16,2.4+float(int(actor["slot"])%3)*0.69)
 				elif site == "helipad":
-					target = Vector3(-2.5,0.18,3.0+lane*0.44)
+					target = Vector3(-4.35,0.16,3.15+float(int(actor["slot"])%3)*0.34)
 				else:
-					target = Vector3(-8.5,0.18,-2.0+lane*0.55)
+					target = Vector3(-8.3,0.16,lane*0.4-1.8)
 			elif site == "lighthouse":
 				target = Vector3(-1.7,0.18,lane*0.7-2.4)
 			elif site == "dike" or site == "dam":
