@@ -3,6 +3,7 @@ const Routes = preload("res://scripts/rescue_routes_3d.gd")
 ## Monde 3D procedurally constructed — visible 360-degree camera and attributed crews.
 ## Workers are represented only by real joined users when live_mode is enabled.
 const MAX_RENDERED_WORKERS := 48
+const MAX_WORK_SPARKS := 64
 const PLANK_COUNT := 15
 const SITE_COLORS := [Color("#29a6a7"), Color("#d3ae76"), Color("#d9e1b8")]
 const SKIN := [Color("#f6d2ac"), Color("#d4a176"), Color("#8f573b"), Color("#674331"), Color("#ebbb90")]
@@ -39,6 +40,7 @@ var last_saved := 0
 var last_event := 0
 var total_spawned := 0
 var water_foam: Array[MeshInstance3D] = []
+var work_sparks: Array[Dictionary] = []
 var rescue_helicopter: Node3D
 var rescue_rotor: Node3D
 var camera_focus: Vector3 = Vector3.ZERO
@@ -171,6 +173,7 @@ func _rebuild_world() -> void:
 	boats.clear()
 	roof_parts.clear()
 	water_foam.clear()
+	work_sparks.clear()
 	rescue_helicopter = null
 	rescue_rotor = null
 	rain.clear()
@@ -619,6 +622,8 @@ func record_event(event: Dictionary) -> void:
 			contribution_text = "ACTION SPECIALE !"
 	action_tag.text = contribution_text
 	actor["last_used"] = clock
+	if kind in ["build","repair","gift","power","rescue"]:
+		_spawn_work_sparks(actor["rig"].position+Vector3(0,1.4,0),kind)
 	if spotlight_time <= 0.4 or kind == "rescue":
 		focus_user = name
 		spotlight_time = 3.5 if kind != "join" else 1.5
@@ -705,6 +710,38 @@ func _animate_workers(delta: float) -> void:
 				var gait_state := str(actor["action"]) if fighting else ("walk" if walking else "idle")
 				avatar.call("animate",delta,gait_state)
 
+func _spawn_work_sparks(at: Vector3, kind: String) -> void:
+	var color := Color("#f5d477") if kind in ["gift","power"] else (
+		Color("#9bffde") if kind=="rescue" else Color("#ffe6b7"))
+	for i in range(6):
+		while work_sparks.size() >= MAX_WORK_SPARKS:
+			var first: Dictionary = work_sparks.pop_front()
+			var old: MeshInstance3D = first["mesh"]
+			if is_instance_valid(old):
+				old.queue_free()
+		var jitter := Vector3(randf_range(-0.25,0.25),randf_range(-0.1,0.28),randf_range(-0.3,0.3))
+		var particle := _ball(terrain,at+jitter,0.055,color)
+		var vel := Vector3(randf_range(-1.6,1.6),randf_range(1.3,3.3),randf_range(-1.6,1.6))
+		work_sparks.append({"mesh":particle,"velocity":vel,"age":0.0,"lifetime":0.64+randf_range(0.0,0.6)})
+
+func _animate_work_sparks(delta: float) -> void:
+	for entry in work_sparks.duplicate():
+		var particle: MeshInstance3D = entry["mesh"]
+		if not is_instance_valid(particle):
+			work_sparks.erase(entry)
+			continue
+		entry["age"] = float(entry["age"])+delta
+		if float(entry["age"]) >= float(entry["lifetime"]):
+			particle.queue_free()
+			work_sparks.erase(entry)
+			continue
+		var vel: Vector3 = entry["velocity"]
+		vel.y -= delta*3.5
+		particle.position += vel*delta
+		entry["velocity"] = vel
+		var fade := 1.0-clampf(float(entry["age"])/float(entry["lifetime"]),0.0,1.0)
+		particle.scale = Vector3.ONE*maxf(0.08,fade)
+
 func _animate_rescues() -> void:
 	var site := str(state.call("scenario_info").get("site_type"))
 	var using_boats := site in ["lighthouse","dike","dam"]
@@ -787,6 +824,7 @@ func _process(delta: float) -> void:
 		cached_roster_size = roster_size
 		_sync_workers()
 	_animate_environment(d)
+	_animate_work_sparks(d)
 
 func visible_workers() -> int:
 	return actors.size()
