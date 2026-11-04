@@ -1,4 +1,5 @@
 extends Node3D
+const Routes = preload("res://scripts/rescue_routes_3d.gd")
 ## Civilian population used by the 3D rescue scene.
 ## They are scenario NPCs, NEVER simulated TikTok spectators.
 ## Each pedestrian has a stable person_index throughout the rescue sequence.
@@ -215,44 +216,19 @@ func _waiting_position(index: int) -> Vector3:
 func _safe_position(index: int) -> Vector3:
 	var row := int(index/6)
 	var col := index%6
-	return Vector3(12.0+float(col)*0.55,0.10,0.6+float(row)*0.92)
+	# The safe zone is next to the actual 3D triage camp, never in a river.
+	if site_type in ["dike","dam"]:
+		return Vector3(10.8+float(col)*0.50,0.14,8.4+float(row)*0.76)
+	return Vector3(11.3+float(col)*0.52,0.14,-6.8+float(row)*0.75)
 
 func _interpolate(a: Vector3,b: Vector3,p: float) -> Vector3:
 	return a.lerp(b,clampf(p,0.0,1.0))
 
 func _route(progress: float, index: int, lane: int) -> Vector3:
-	var p := clampf(progress,0.0,1.0)
-	var z := -0.75+float(lane)*0.75
-	match site_type:
-		"bridge":
-			var start := _waiting_position(index)
-			if p < 0.18:
-				return _interpolate(start,Vector3(-7.1,1.28,z),p/0.18)
-			if p < 0.82:
-				return _interpolate(Vector3(-7.1,1.28,z),Vector3(7.1,1.28,z),(p-0.18)/0.64)
-			return _interpolate(Vector3(7.1,1.28,z),_safe_position(index),(p-0.82)/0.18)
-		"dike","dam":
-			var place := Vector3(-11.0,0.13,9.1+float(lane)*0.52)
-			var refuge := Vector3(11.2,0.13,9.1+float(lane)*0.52)
-			if p < 0.22:
-				return _interpolate(_waiting_position(index),place,p/0.22)
-			if p < 0.84:
-				return _interpolate(place,refuge,(p-0.22)/0.62)
-			return _interpolate(refuge,_safe_position(index),(p-0.84)/0.16)
-		"lighthouse":
-			var embark := Vector3(-5.8,0.2,2.4+float(lane)*0.6)
-			if p < 0.20:
-				return _interpolate(_waiting_position(index),embark,p/0.20)
-			if p < 0.88:
-				# Walkable representation of a passenger aboard the moving boat.
-				return Vector3(-5.8+11.6*(p-0.2)/0.68,0.4,2.4+float(lane)*0.6)
-			return _interpolate(Vector3(5.8,0.4,2.4+float(lane)*0.6),_safe_position(index),(p-0.88)/0.12)
-		"helipad":
-			var landing := Vector3(-1.9,0.73,3.4+float(lane)*0.38)
-			if p < 0.62:
-				return _interpolate(_waiting_position(index),landing,p/0.62)
-			return landing+Vector3((p-0.62)*7.0,(p-0.62)*9.0,0)
-	return _interpolate(_waiting_position(index),_safe_position(index),p)
+	return Routes.position(site_type,progress,_waiting_position(index),_safe_position(index),lane)
+
+func route_phase(progress: float) -> String:
+	return Routes.stage(site_type,progress)
 
 func sync(delta: float) -> void:
 	if mission == null:
@@ -279,11 +255,16 @@ func sync(delta: float) -> void:
 		var idle_drift := Vector3(sin(time*0.42+float(idx)*1.4)*0.19,0.0,cos(time*0.35+float(idx))*0.18)
 		target += idle_drift
 		var walk := false
+		var is_passenger := false
+		var route_stage := "waiting"
 		if crossing.has(idx):
 			var entry: Dictionary = crossing[idx]
+			var progress := float(entry.get("p",0.0))
 			phase = "crossing"
-			target = _route(float(entry.get("p",0.0)),idx,int(entry.get("lane",0)))
-			walk = true
+			route_stage = route_phase(progress)
+			target = _route(progress,idx,int(entry.get("lane",0)))
+			is_passenger = Routes.transported(site_type,progress)
+			walk = not is_passenger
 		elif idx < started:
 			phase = "safe"
 			target = _safe_position(idx)
@@ -300,12 +281,19 @@ func sync(delta: float) -> void:
 		actor["phase"] = phase
 		actor["age"] = float(actor["age"])+d
 		var t := float(actor["age"])
-		var walking_speed := 4.8 if bool(actor["is_elder"]) else (6.2 if bool(actor["is_child"]) else 5.6)
-		var movement: Vector3 = rig.call("move_to",target,walking_speed if walk else 3.0,d)
+		var walking_speed := 5.0 if bool(actor["is_elder"]) else (6.4 if bool(actor["is_child"]) else 6.0)
+		# Passengers move with boats/helicopters. Disabling collision temporarily
+		# avoids a phantom walk through a dam wall or aircraft while aboard.
+		var body := rig as CharacterBody3D
+		body.collision_mask = 0 if is_passenger else 3
+		var move_speed := 8.5 if is_passenger else (walking_speed if walk else 2.4)
+		var movement: Vector3 = rig.call("move_to",target,move_speed,d)
 		if movement.length_squared()>0.00003 and walk:
 			rig.rotation.y = lerp_angle(rig.rotation.y,atan2(movement.x,movement.z),minf(1.0,d*5.0))
 		var pace := 7.8 if walk else 2.0
 		var swing := sin(t*pace+float(idx)*0.8)*(0.58 if walk else (0.25 if endangered and phase=="waiting" else 0.07))
+		if is_passenger:
+			swing = sin(t*1.7+float(idx))*0.09
 		(actor["left_arm"] as Node3D).rotation.x = swing
 		(actor["right_arm"] as Node3D).rotation.x = -swing
 		(actor["left_leg"] as Node3D).rotation.x = -swing*0.60
@@ -313,7 +301,7 @@ func sync(delta: float) -> void:
 		if actor.has("avatar"):
 			var avatar: Node3D = actor["avatar"]
 			if is_instance_valid(avatar):
-				avatar.call("animate",d,"walk" if walk else ("celebrate" if phase=="safe" else "idle"))
+				avatar.call("animate",d,"idle" if is_passenger else ("walk" if walk else ("celebrate" if phase=="safe" else "idle")))
 		# Different body language: asking for help, walking to safety,
 		# and celebrating after reaching the real refuge.
 		if phase=="safe" and not walk:
@@ -329,12 +317,22 @@ func sync(delta: float) -> void:
 		var recent_arrival := phase=="safe" and (time-float(actor.get("safe_at",-100.0))) < 3.5
 		rescue_tag.visible = phase=="crossing" or recent_arrival
 		if rescue_tag.visible:
-			rescue_tag.text = "EN ROUTE" if phase=="crossing" else "SAUVE"
+			if phase=="safe":
+				rescue_tag.text = "SAUVE"
+			elif route_stage == "flight":
+				rescue_tag.text = "EN VOL"
+			elif route_stage == "boat":
+				rescue_tag.text = "A BORD"
+			elif route_stage == "boarding":
+				rescue_tag.text = "EMBARQUEMENT"
+			else:
+				rescue_tag.text = "EN ROUTE"
 			rescue_tag.modulate = Color("#ffe2a7") if phase=="crossing" else Color("#a9ffd5")
 			rescue_tag.position.y = 2.54+0.10*sin(t*3.0)
 		# Look toward the bridge or refuge even when standing still.
 		if phase=="waiting" and not walk:
 			rig.rotation.y = lerp_angle(rig.rotation.y,0.3+sin(t*0.45+float(idx))*0.16,minf(1.0,d*1.5))
+		actor["route_stage"] = route_stage
 		var appearance: Node3D = actor["visual"]
 		appearance.position.y = 0.021*sin(t*pace) if walk else 0.008*sin(t*pace)
 		if actor.has("avatar"):
@@ -351,6 +349,15 @@ func visible_count() -> int:
 
 func movement_count() -> int:
 	return count_away
+
+func transit_details() -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for actor in crowd:
+		if str(actor.get("phase","")) == "crossing":
+			var npc: Node3D = actor["node"]
+			result.append({"index":int(actor["id"]),"stage":str(actor.get("route_stage","")),
+				"position":npc.position})
+	return result
 
 func first_in_transit_position() -> Vector3:
 	for actor in crowd:
