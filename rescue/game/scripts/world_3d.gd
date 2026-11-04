@@ -1,4 +1,5 @@
 extends Node3D
+const Routes = preload("res://scripts/rescue_routes_3d.gd")
 ## Monde 3D procedurally constructed — visible 360-degree camera and attributed crews.
 ## Workers are represented only by real joined users when live_mode is enabled.
 const MAX_RENDERED_WORKERS := 48
@@ -359,7 +360,7 @@ func _build_helipad() -> void:
 	_box(terrain,Vector3(-1.9,0.54,3.4),Vector3(0.48,0.05,2.8),Color("#f4e9c1"))
 	var heli := Node3D.new()
 	terrain.add_child(heli)
-	heli.position = Vector3(0,3.3,8.0)
+	heli.position = Vector3(-1.9,2.45,3.15)
 	_ball(heli,Vector3.ZERO,1.1,Color("#e6b35e"))
 	_box(heli,Vector3(1.5,0.2,0.0),Vector3(2.8,0.25,0.28),Color("#e0c17e"))
 	_box(heli,Vector3(0,1.15,0),Vector3(5.4,0.08,0.15),Color("#e7e6d9"))
@@ -385,15 +386,29 @@ func _build_crane() -> void:
 	cranes.append(crane)
 
 func _build_boats() -> void:
+	var site := str(state.call("scenario_info").get("site_type"))
 	for i in range(4):
 		var ship := Node3D.new()
+		ship.name = "EvacuationBoat_%d" % i
 		terrain.add_child(ship)
-		ship.position = Vector3(-6.1,-0.1,-3.0+float(i)*2.0)
-		_box(ship,Vector3.ZERO,Vector3(1.6,0.34,0.8),Color("#b78d5a"))
-		_cylinder(ship,Vector3(0,0.8,0),0.04,1.6,Color("#e8ddd0"))
-		_box(ship,Vector3(0.25,0.93,0),Vector3(0.5,0.72,0.06),Color("#f2e5c9"))
+		ship.position = Vector3(-5.35,0.19,9.0)
+		var rescue_color := Color("#e6ba77") if site=="lighthouse" else Color("#69b0a5")
+		_box(ship,Vector3.ZERO,Vector3(2.05,0.38,1.32),Color("#9c765b"))
+		_box(ship,Vector3(0,0.19,0),Vector3(1.86,0.10,1.10),Color("#b8a382"))
+		for z in [-0.52,0.52]:
+			_box(ship,Vector3(0,0.35,z),Vector3(1.9,0.43,0.10),rescue_color)
+		_box(ship,Vector3(-0.73,0.35,0),Vector3(0.11,0.48,1.0),rescue_color)
+		_box(ship,Vector3(0.73,0.35,0),Vector3(0.11,0.48,1.0),rescue_color)
+		_box(ship,Vector3(-0.45,0.62,0),Vector3(0.09,0.78,0.08),Color("#eee8ca"))
+		_ball(ship,Vector3(-0.45,1.02,0),0.16,Color("#efda9b"))
 		ship.visible = false
 		boats.append(ship)
+	if site in ["dike","dam","lighthouse"]:
+		var dock_z := 2.9 if site=="lighthouse" else 9.7
+		for shore in [-1.0,1.0]:
+			_box(terrain,Vector3(shore*6.65,0.27,dock_z),Vector3(1.92,0.18,3.0),Color("#c3a77f"))
+			_box(terrain,Vector3(shore*6.7,0.70,dock_z-1.34),Vector3(0.09,0.82,0.10),Color("#a38a6e"))
+			_box(terrain,Vector3(shore*6.7,0.70,dock_z+1.34),Vector3(0.09,0.82,0.10),Color("#a38a6e"))
 
 func _update_segments(completion: float) -> void:
 	var count := int(ceil(clampf(completion,0.0,100.0)/100.0*float(PLANK_COUNT)))
@@ -676,19 +691,32 @@ func _animate_workers(delta: float) -> void:
 				avatar.call("animate",delta,gait_state)
 
 func _animate_rescues() -> void:
-	# Boats are a real visual only during maritime rescue missions.
-	var is_maritime := str(state.call("scenario_info").get("site_type")) == "lighthouse"
-	var moving: Array = state.get("crossings")
+	var site := str(state.call("scenario_info").get("site_type"))
+	var using_boats := site in ["lighthouse","dike","dam"]
+	var active: Array = state.get("crossings")
 	for i in range(boats.size()):
 		var boat: Node3D = boats[i]
-		boat.visible = is_maritime and i < moving.size()
+		boat.visible = using_boats and i < active.size()
 		if boat.visible:
-			var crossing: Dictionary = moving[i]
-			var p := float(crossing.get("p",0.0))
-			var lane := float(crossing.get("lane",0))
-			boat.position = Vector3(-5.8+p*11.6,-0.14+sin(clock*2.4+lane)*0.08,2.4+lane*0.6)
-			boat.rotation.y = -0.3+sin(clock*1.3+float(i))*0.12
-
+			var passenger: Dictionary = active[i]
+			var progress := float(passenger.get("p",0.0))
+			var lane := int(passenger.get("lane",0))
+			boat.position = Routes.vehicle_position(site,progress,lane)
+			boat.position.y += sin(clock*2.5+float(i))*0.035
+			boat.rotation.y = 0.09*sin(clock*1.8+float(i))
+	if rescue_helicopter != null and is_instance_valid(rescue_helicopter) and site=="helipad":
+		var flying := false
+		if not active.is_empty():
+			var first: Dictionary = active[0]
+			var p := float(first.get("p",0.0))
+			var lane := int(first.get("lane",0))
+			if p >= 0.15 and p <= 0.90:
+				var flight_target: Vector3 = Routes.vehicle_position(site,p,lane)
+				rescue_helicopter.position = rescue_helicopter.position.lerp(flight_target,0.16)
+				flying = true
+		if not flying:
+			rescue_helicopter.position = rescue_helicopter.position.lerp(
+				Vector3(-1.9,2.45+sin(clock*2.0)*0.05,3.15),0.04)
 
 func _process(delta: float) -> void:
 	if state == null:
@@ -763,7 +791,9 @@ func _build_rescue_camps() -> void:
 	var emergency_tent := Node3D.new()
 	emergency_tent.name = "EmergencyCareCamp"
 	terrain.add_child(emergency_tent)
-	emergency_tent.position = Vector3(13.3,0.14,-9.2)
+	var site := str(state.call("scenario_info").get("site_type"))
+	var refuge_z := 8.5 if site in ["dike","dam"] else -7.1
+	emergency_tent.position = Vector3(13.3,0.14,refuge_z)
 	_box(emergency_tent,Vector3(0,0.2,0),Vector3(5.5,0.28,4.4),Color("#bcb7a1"))
 	_box(emergency_tent,Vector3(0,1.6,0),Vector3(4.8,2.6,3.5),Color("#e7e4d4"))
 	var rooftop := _box(emergency_tent,Vector3(0,3.16,0),Vector3(5.2,0.32,3.9),Color("#d1dfd2"))
@@ -788,7 +818,7 @@ func _build_rescue_camps() -> void:
 	var ambulance := Node3D.new()
 	ambulance.name = "RescueAmbulance"
 	terrain.add_child(ambulance)
-	ambulance.position = Vector3(18.6,0.13,-7.7)
+	ambulance.position = Vector3(18.6,0.13,refuge_z+1.2)
 	_box(ambulance,Vector3(0,0.89,0),Vector3(3.6,1.65,1.75),Color("#eef0e2"))
 	_box(ambulance,Vector3(-0.56,1.45,0.91),Vector3(0.81,0.57,0.09),Color("#5e99b4"))
 	_box(ambulance,Vector3(1.3,1.07,0.91),Vector3(0.48,0.48,0.13),Color("#e76e57"))
@@ -841,9 +871,7 @@ func _animate_environment(delta: float) -> void:
 		light_refuge.light_energy = 1.15+0.13*sin(clock*1.8)
 	if rescue_rotor != null and is_instance_valid(rescue_rotor):
 		rescue_rotor.rotation.y += delta * 24.0
-	if rescue_helicopter != null and is_instance_valid(rescue_helicopter):
-		var has_passengers := not state.get("crossings").is_empty()
-		rescue_helicopter.position.y = 3.3+0.12*sin(clock*2.3)+(1.0 if has_passengers else 0.0)
+	# Helicopter location is driven by the passenger's rescue track in physics.
 
 func visible_civilians() -> int:
 	return int(civilians.call("visible_count")) if civilians != null else 0
