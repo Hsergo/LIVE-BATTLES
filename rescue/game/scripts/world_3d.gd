@@ -594,7 +594,7 @@ func record_event(event: Dictionary) -> void:
 	var name := str(event.get("user",""))
 	if not live_mode:
 		name = "DEMO" + str(randi_range(1,9))
-	if name.is_empty() or kind not in ["join","build","repair","rescue","gift","power"]:
+	if name.is_empty() or kind not in ["join","build","repair","rescue","gift","power","success"]:
 		if kind in ["danger","power"]:
 			surprise_time = 3.0
 		return
@@ -618,9 +618,11 @@ func record_event(event: Dictionary) -> void:
 			contribution_text = "RENFORT !"
 		"power":
 			contribution_text = "ACTION SPECIALE !"
+		"success":
+			contribution_text = "SAUVETAGE REUSSI !"
 	action_tag.text = contribution_text
 	actor["last_used"] = clock
-	if kind in ["build","repair","gift","power","rescue"]:
+	if kind in ["build","repair","gift","power","rescue","success"]:
 		_spawn_work_sparks(actor["rig"].position+Vector3(0,1.4,0),kind)
 	if spotlight_time <= 0.4 or kind == "rescue":
 		focus_user = name
@@ -710,7 +712,7 @@ func _animate_workers(delta: float) -> void:
 
 func _spawn_work_sparks(at: Vector3, kind: String) -> void:
 	var color := Color("#f5d477") if kind in ["gift","power"] else (
-		Color("#9bffde") if kind=="rescue" else Color("#ffe6b7"))
+		Color("#9bffde") if kind in ["rescue","success"] else Color("#ffe6b7"))
 	for i in range(6):
 		while work_sparks.size() >= MAX_WORK_SPARKS:
 			var first: Dictionary = work_sparks.pop_front()

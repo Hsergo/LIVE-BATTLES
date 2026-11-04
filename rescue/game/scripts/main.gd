@@ -158,7 +158,7 @@ func _process(delta: float) -> void:
 				world_3d.call("record_event",scene_event)
 				var actor_name := str(scene_event.get("user",""))
 				var event_kind := str(scene_event.get("kind",""))
-				if event_kind in ["build","repair","rescue","gift","power"] and not actor_name.is_empty():
+				if event_kind in ["build","repair","rescue","gift","power","success"] and not actor_name.is_empty():
 					action_headline = "@" + actor_name.substr(0,20) + "  •  " + str(scene_event.get("message","")).substr(0,43)
 					action_headline_life = 4.5
 				world_3d.set("last_event",int(scene_event.get("id",0)))
