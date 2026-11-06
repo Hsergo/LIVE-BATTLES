@@ -94,6 +94,13 @@ jobs:
           & $godot.FullName --headless --path rescue/game --script res://tests/crowd_physics_rules.gd
           if ($LASTEXITCODE -ne 0) { throw 'Collisions personnages invalides' }
 
+      - name: Verifier l'arrivee physique avant de compter les sauveteurs
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
+          & $godot.FullName --headless --path rescue/game --script res://tests/physical_arrival_qa.gd
+          if ($LASTEXITCODE -ne 0) { throw 'Confirmation des arrives physiques invalide' }
+
       - name: Recette des embarquements, escorts et publics nombreux
         run: |
           $ErrorActionPreference = 'Stop'
