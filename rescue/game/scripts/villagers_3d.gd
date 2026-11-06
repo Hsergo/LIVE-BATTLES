@@ -379,7 +379,7 @@ func first_in_transit_position() -> Vector3:
 func last_rescued_position() -> Vector3:
 	if crowd.is_empty() or mission == null:
 		return Vector3(12.0,0.2,0.0)
-	var last_index := clampi(int(mission.get("saved"))-1,0,crowd.size()-1)
+	var last_index := clampi(int(mission.get("last_rescued_person_index")),0,crowd.size()-1)
 	var actor: Dictionary = crowd[last_index]
 	var rig: Node3D = actor["node"]
 	return rig.position if is_instance_valid(rig) else _safe_position(last_index)

@@ -46,6 +46,7 @@ var weather_stage := 0
 var total_duration := BASE_DURATION
 var flood_level := 0.0
 var last_rescuer := ""
+var last_rescued_person_index := -1
 var protection_seconds := 0.0
 var supply_level := 0
 var gifted_resources := 0
@@ -102,6 +103,7 @@ func _start_mission(reset_people: bool) -> void:
 	hazard_pressure = 0.0
 	last_special = ""
 	last_rescuer = ""
+	last_rescued_person_index = -1
 	next_disaster = 0
 	protection_seconds = 0.0
 	supply_level = 0
@@ -404,6 +406,7 @@ func tick(delta: float) -> void:
 		if float(crossing["p"]) >= 1.0 and (arrival_gate.is_null() or bool(arrival_gate.call(int(crossing.get("person_index",-1))))):
 			crossings.erase(crossing)
 			saved += 1
+			last_rescued_person_index = int(crossing.get("person_index",-1))
 			strength = maxf(0.0,strength-0.6)
 			var rescuer := str(crossing.get("rescuer",""))
 			if participants.has(rescuer):

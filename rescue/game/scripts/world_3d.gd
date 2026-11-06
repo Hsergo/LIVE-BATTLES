@@ -645,9 +645,9 @@ func _animate_workers(delta: float) -> void:
 		var t := float(actor["age"])
 		var remaining := maxf(0,float(actor["action_time"])-delta)
 		var escort: Dictionary = {}
-		if str(actor["action"]) == "rescue" and live_mode:
+		if str(actor["action"]) == "rescue":
 			for passenger in state.get("crossings"):
-				if str(passenger.get("rescuer","")) == str(user):
+				if (live_mode and str(passenger.get("rescuer","")) == str(user)) or (not live_mode and escort.is_empty()):
 					escort = passenger
 					break
 		if not escort.is_empty():
