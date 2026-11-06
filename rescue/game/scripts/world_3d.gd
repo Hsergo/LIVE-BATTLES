@@ -178,8 +178,10 @@ func _rebuild_world() -> void:
 	rescue_rotor = null
 	rain.clear()
 	civilians = null
-	last_event = 0
-	last_saved = 0
+	# Avoid replaying old participants' work effects after a scene transition.
+	# New authentic events continue with monotonically increasing event_id.
+	last_event = int(state.get("event_id"))
+	last_saved = int(state.get("saved"))
 	# Generous terrain so full orbit never reveals a void.
 	_box(terrain,Vector3(0,-2.4,0),Vector3(52,2.5,48),Color("#4b805d"))
 	_box(terrain,Vector3(-15.0,-0.55,0),Vector3(19,1.25,39),Color("#688e64"))
