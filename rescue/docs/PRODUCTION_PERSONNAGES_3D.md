@@ -103,3 +103,33 @@ L'ouvrier qui a initié l'évacuation accompagne son villageois sur les missions
 La prochaine étape de recette exige l'import des ressources du moteur, les tests de physiques/animations et un contrôle visuel sur Windows, plus l'essai auprès du vrai créateur TikTok. Il faudra aussi confirmer que les modèles humains riggés sous licence sont visibles dans les trois situations de caméra et que 48 ouvriers restent fluides sur le PC cible.
 
 Ne pas présenter cette phase comme un jeu photoréaliste terminé : les modèles restent mixtes (riggés et procéduraux) et les mouvements ne sont pas issus de mocap professionnelle.
+
+## Cycle suivant : fiabilisation des évacuations et du rendu de foule
+
+**État : changements dans le code source, pas encore de validation moteur.** Cette production conserve la demande de ne créer aucun nouvel installateur avant la recette des personnages.
+
+### Avancées intégrées
+
+- L'événement d'évacuation garde `person_index`, le pseudonyme responsable et une voie distincte (maximum trois voies en simultané ; un transport héliporté à la fois). Les autres demandes restent en file sans disparaître.
+- La cadence de trajet est devenue plus progressive pour laisser du temps aux mouvements corporels et aux véhicules.
+- **Arrivée physique vérifiée :** en mode 3D, `mission.gd` consulte le callback `arrival_gate` du monde 3D. Le compteur n'augmente qu'une fois le civil à proximité de sa position de refuge ; les points d'arrivée ne peuvent pas être doublés. En mode de règles pures sans 3D, le callback est facultatif.
+- En cas de plusieurs évacuations terminées dans le désordre, l'indice du dernier villageois effectivement sauvé permet de guider la caméra vers **la bonne personne**.
+- Les personnages de démonstration peuvent accompagner les villageois, sans être présentés comme des spectateurs réels.
+- La nouvelle scène ne rejoue plus les anciennes commandes du chat : `last_event` est aligné sur l'identifiant d'événement courant du modèle.
+- **Optimisation GPU :** 48 ouvriers simultanément visibles dans le budget de rendu, dont jusqu'à 18 en modèle détaillé ; les autres ont une silhouette 3D allégée. Le système donne priorité à la proximité de la caméra et aux auteurs récents, avec un recalcul environ toutes les 0,6 secondes. Les points et pseudos des personnes hors affichage continuent d'être suivis.
+- Les animations de squelettes humains cachés sont suspendues pour ne pas consommer inutilement du temps processeur.
+
+### Vérifications d'intégration prévues, sans compilation immédiate
+
+- `tests/physical_arrival_qa.gd` : ordre d'arrivée inversé, points uniques, file de quatre personnes, trois voies de ferry, fonctionnement sans scène graphique.
+- `tests/crew_lod_qa.gd` : 60 spectateurs, 48 ouvriers rendus, 18 modèles détaillés, priorité au dernier auteur d'une action.
+- `tests/rescue_choreography_qa.gd` et `tests/rescue_routes_qa.gd` : trajets à pied, embarquement, vol et sécurité des collisions.
+- Les tests sont **déclarés dans le workflow Windows**, mais celui-ci est configuré pour un déclenchement manuel et n'a pas été lancé dans ce cycle.
+
+### Points ouverts avant de qualifier le jeu de complet
+
+1. Validation de l'import Godot des modèles riggés, syntaxe GDScript, collisions et animation réellement visible.
+2. Comparaison visuelle côte-à-côte de 15 missions, enrichissement de leurs dangers **propres**, pas seulement d'un texte ou d'un multiplicateur de difficulté.
+3. Contrôle de stabilité sur une séance de 2 h, notamment avec 50+ spectateurs, et reprise après coupure du pont TikTok.
+4. Refonte supplémentaire de la qualité des assets 3D si les personnages restent trop schématiques ; ne pas qualifier de photoréaliste.
+5. Validation du connecteur TikTok sur une vraie session avant de dire qu'un LIVE public est prêt.
