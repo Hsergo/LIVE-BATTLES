@@ -101,6 +101,13 @@ jobs:
           & $godot.FullName --headless --path rescue/game --script res://tests/physical_arrival_qa.gd
           if ($LASTEXITCODE -ne 0) { throw 'Confirmation des arrives physiques invalide' }
 
+      - name: Stress visuel 60 spectateurs avec LOD des 48 ouvriers
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
+          & $godot.FullName --headless --path rescue/game --script res://tests/crew_lod_qa.gd
+          if ($LASTEXITCODE -ne 0) { throw 'Allocation des travailleurs par niveau de detail invalide' }
+
       - name: Recette des embarquements, escorts et publics nombreux
         run: |
           $ErrorActionPreference = 'Stop'
