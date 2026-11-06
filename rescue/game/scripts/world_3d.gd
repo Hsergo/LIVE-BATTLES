@@ -965,3 +965,8 @@ func _add_rail_collider(at: Vector3, box_size: Vector3) -> void:
 	collider.shape = shape
 	obstacle.add_child(collider)
 	terrain.add_child(obstacle)
+
+func can_complete_evacuate(person_index: int) -> bool:
+	if civilians == null or not is_instance_valid(civilians):
+		return false
+	return bool(civilians.call("at_refuge",person_index))

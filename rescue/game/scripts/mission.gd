@@ -30,6 +30,8 @@ var saved := 0
 var target := 12
 var rescue_queue := 0
 var rescue_owners: Array[String] = []
+# Optional scene-level arrival confirmation; source-only/headless model remains autonomous.
+var arrival_gate: Callable = Callable()
 var next_villager_index := 0
 var crossings: Array[Dictionary] = []
 var participants: Dictionary = {}
@@ -399,7 +401,7 @@ func tick(delta: float) -> void:
 		var safe_crossing := progress >= 99.9 and strength >= 20.0
 		if safe_crossing:
 			crossing["p"] = minf(1.0,float(crossing["p"])+d*float(crossing["speed"]))
-		if float(crossing["p"]) >= 1.0:
+		if float(crossing["p"]) >= 1.0 and (arrival_gate.is_null() or bool(arrival_gate.call(int(crossing.get("person_index",-1))))):
 			crossings.erase(crossing)
 			saved += 1
 			strength = maxf(0.0,strength-0.6)

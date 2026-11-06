@@ -383,3 +383,10 @@ func last_rescued_position() -> Vector3:
 	var actor: Dictionary = crowd[last_index]
 	var rig: Node3D = actor["node"]
 	return rig.position if is_instance_valid(rig) else _safe_position(last_index)
+
+func at_refuge(person_index: int) -> bool:
+	if person_index < 0 or person_index >= crowd.size():
+		return false
+	var actor: Dictionary = crowd[person_index]
+	var npc: Node3D = actor["node"]
+	return is_instance_valid(npc) and npc.position.distance_to(_safe_position(person_index)) <= 0.65

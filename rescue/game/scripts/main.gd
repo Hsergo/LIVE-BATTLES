@@ -88,6 +88,8 @@ func _setup_world_3d() -> void:
 	world_3d = load("res://scripts/world_3d.gd").new()
 	world_viewport.add_child(world_3d)
 	world_3d.call("initialize",state,false)
+	# Confirm actual 3D arrival before awarding a completed rescue.
+	state.set("arrival_gate",Callable(world_3d,"can_complete_evacuate"))
 	world_sprite = Sprite2D.new()
 	world_sprite.name = "ThreeDimensionalBackdrop"
 	world_sprite.centered = false

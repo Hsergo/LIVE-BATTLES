@@ -52,7 +52,7 @@ func _run() -> void:
 	world_model.set("progress",100.0)
 	world_model.set("strength",94.0)
 	world_model.call("rescue","DEMO")
-	for frame in range(490):
+	for frame in range(800):
 		await physics_frame
 		world_model.call("tick",1.0/60.0)
 		villagers.call("sync",1.0/60.0)
