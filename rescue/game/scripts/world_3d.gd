@@ -3,6 +3,7 @@ const Routes = preload("res://scripts/rescue_routes_3d.gd")
 ## Monde 3D procedurally constructed — visible 360-degree camera and attributed crews.
 ## Workers are represented only by real joined users when live_mode is enabled.
 const MAX_RENDERED_WORKERS := 48
+const MAX_DETAILED_WORKERS := 18
 const MAX_WORK_SPARKS := 64
 const PLANK_COUNT := 15
 const SITE_COLORS := [Color("#29a6a7"), Color("#d3ae76"), Color("#d9e1b8")]
@@ -44,6 +45,7 @@ var work_sparks: Array[Dictionary] = []
 var rescue_helicopter: Node3D
 var rescue_rotor: Node3D
 var camera_focus: Vector3 = Vector3.ZERO
+var lod_clock := 0.0
 var roster_clock := 0.0
 var cached_roster_size := 0
 
@@ -508,6 +510,16 @@ func _worker(name: String) -> Dictionary:
 	action_tag.modulate = Color("#fff0a5")
 	action_tag.outline_size = 9
 	action_tag.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+	var low_detail := Node3D.new()
+	low_detail.name = "DistantCrewSilhouette"
+	rig.add_child(low_detail)
+	_box(low_detail,Vector3(0,1.0,0),Vector3(0.59,0.82,0.35),uniform)
+	_ball(low_detail,Vector3(0,1.84,0),0.27,skin_color)
+	_box(low_detail,Vector3(0,2.06,0),Vector3(0.62,0.22,0.34),helmet_color)
+	for leg_x in [-0.17,0.17]:
+		_box(low_detail,Vector3(leg_x,0.36,0),Vector3(0.23,0.70,0.24),Color("#35445b"))
+	low_detail.visible = false
+	limbs["lod"] = low_detail
 	limbs["rig"] = rig
 	limbs["visual"] = model_root
 	limbs["label"] = tag
@@ -708,7 +720,7 @@ func _animate_workers(delta: float) -> void:
 			rig.rotation.y = lerp_angle(rig.rotation.y,0.3,minf(1.0,delta*2.0))
 		if actor.has("avatar"):
 			var avatar: Node3D = actor["avatar"]
-			if is_instance_valid(avatar):
+			if is_instance_valid(avatar) and avatar.visible:
 				var gait_state := str(actor["action"]) if fighting else ("walk" if walking else "idle")
 				avatar.call("animate",delta,gait_state)
 
@@ -743,6 +755,45 @@ func _animate_work_sparks(delta: float) -> void:
 		entry["velocity"] = vel
 		var fade := 1.0-clampf(float(entry["age"])/float(entry["lifetime"]),0.0,1.0)
 		particle.scale = Vector3.ONE*maxf(0.08,fade)
+
+func _update_worker_lod() -> void:
+	if camera == null or not is_instance_valid(camera):
+		return
+	var order: Array = actors.keys()
+	order.sort_custom(func(a,b):
+		var worker_a: Dictionary = actors[a]
+		var worker_b: Dictionary = actors[b]
+		var pos_a: Node3D = worker_a["rig"]
+		var pos_b: Node3D = worker_b["rig"]
+		var score_a := pos_a.position.distance_to(camera.position)
+		var score_b := pos_b.position.distance_to(camera.position)
+		if float(worker_a.get("action_time",0.0)) > 0.0:
+			score_a -= 45.0
+		if float(worker_b.get("action_time",0.0)) > 0.0:
+			score_b -= 45.0
+		if str(a) == focus_user:
+			score_a -= 40.0
+		if str(b) == focus_user:
+			score_b -= 40.0
+		return score_a < score_b
+	)
+	var detailed := 0
+	for user in order:
+		var actor: Dictionary = actors[user]
+		var full := detailed < MAX_DETAILED_WORKERS
+		if full:
+			detailed += 1
+		var fallback: Node3D = actor["visual"]
+		fallback.visible = full and not actor.has("avatar")
+		var low: Node3D = actor["lod"]
+		low.visible = not full
+		if actor.has("avatar"):
+			var human: Node3D = actor["avatar"]
+			if is_instance_valid(human):
+				human.visible = full
+			if actor.has("equipment"):
+				var equipment: Node3D = actor["equipment"]
+				equipment.visible = full
 
 func _animate_rescues() -> void:
 	var site := str(state.call("scenario_info").get("site_type"))
@@ -825,6 +876,10 @@ func _process(delta: float) -> void:
 		roster_clock = 0.0
 		cached_roster_size = roster_size
 		_sync_workers()
+	lod_clock += d
+	if lod_clock >= 0.6:
+		lod_clock = 0.0
+		_update_worker_lod()
 	_animate_environment(d)
 	_animate_work_sparks(d)
 
