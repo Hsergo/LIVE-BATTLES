@@ -375,12 +375,22 @@ func tick(delta: float) -> void:
 		_note("ALERTE %d/3 • %s !" % [next_disaster, str(SCENARIOS[scenario_index]["event_text"])], "danger")
 	if demo_mode:
 		_tick_demo()
-	var max_simultaneous := 1 if str(SCENARIOS[scenario_index]["site_type"])=="helipad" else 4
+	var max_simultaneous := 1 if str(SCENARIOS[scenario_index]["site_type"])=="helipad" else 3
 	if rescue_queue > 0 and crossings.size() < max_simultaneous and progress >= 99.9 and strength >= 20.0:
 		rescue_queue -= 1
 		var owner := rescue_owners.pop_front() if not rescue_owners.is_empty() else ""
-		crossings.append({"p":0.0,"speed":0.16+randf_range(-0.013,0.013),
-			"lane":randi_range(0,2),"person_index":next_villager_index,
+		var free_lane := 0
+		for candidate in range(3):
+			var occupied := false
+			for entry in crossings:
+				if int(entry.get("lane",-1)) == candidate:
+					occupied = true
+					break
+			if not occupied:
+				free_lane = candidate
+				break
+		crossings.append({"p":0.0,"speed":0.12+randf_range(-0.006,0.006),
+			"lane":free_lane,"person_index":next_villager_index,
 			"rescuer":owner})
 		next_villager_index += 1
 	for crossing in crossings.duplicate():
