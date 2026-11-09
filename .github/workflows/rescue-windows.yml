@@ -49,6 +49,13 @@ jobs:
           & $godot.FullName --headless --path rescue/game --script res://tests/mission_rules.gd
           if ($LASTEXITCODE -ne 0) { throw 'Regles de la mission invalides' }
 
+      - name: Tester les mecanismes des 15 missions et decors uniques
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
+          & $godot.FullName --headless --path rescue/game --script res://tests/mission_dynamics_qa.gd
+          if ($LASTEXITCODE -ne 0) { throw 'Missions uniques invalides' }
+
       - name: Verifier les 15 niveaux et les 5 decors
         run: |
           $ErrorActionPreference = 'Stop'
