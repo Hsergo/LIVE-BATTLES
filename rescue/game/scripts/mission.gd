@@ -14,10 +14,22 @@ const REPAIR_COOLDOWN := 2.0
 const RESCUE_COOLDOWN := 2.6
 const DISASTER_STAGES := [0.35, 0.68, 0.88]
 const Catalog = preload("res://scripts/mission_catalog.gd")
+const Dynamics = preload("res://scripts/mission_dynamics.gd")
 const SCENARIOS = Catalog.LEVELS
 var demo_mode := true
 var hazard_pressure := 0.0
 var last_special := ""
+var mission_profile: Dictionary = {}
+var secondary_label := ""
+var secondary_goal := 80.0
+var secondary_progress := 0.0
+var secondary_complete := false
+var secondary_milestone := 0
+var mission_phase := 0
+var mission_phase_label := ""
+var crisis_level := 0.0
+var crisis_cooldown := 0.0
+var crisis_trigger_count := 0
 var scenario_index := 0
 var mission_index := 1
 var status := "WAITING"
@@ -84,6 +96,17 @@ func _start_mission(reset_people: bool) -> void:
 	cooldowns.clear()
 	visual_events.clear()
 	scenario_index = (mission_index - 1) % SCENARIOS.size()
+	mission_profile = Dynamics.get_profile(str(SCENARIOS[scenario_index]["id"]))
+	secondary_label = str(mission_profile.get("side_title","MISSION D'EQUIPE"))
+	secondary_goal = float(mission_profile.get("side_goal",80))
+	secondary_progress = 0.0
+	secondary_complete = false
+	secondary_milestone = 0
+	mission_phase = 0
+	mission_phase_label = str((mission_profile.get("phases",["PREPARATION"]) as Array)[0])
+	crisis_level = float(mission_profile.get("risk_start",20.0))
+	crisis_cooldown = 0.0
+	crisis_trigger_count = 0
 	status = "RUNNING" if demo_mode or not participants.is_empty() else "WAITING"
 	total_duration = DEMO_DURATION if demo_mode else float(SCENARIOS[scenario_index]["duration"])
 	seconds = total_duration
@@ -184,6 +207,117 @@ func receive(user: String, command: String) -> bool:
 		return vote(user, cmd.right(1))
 	return false
 
+func _advance_secondary(action: String, user: String) -> void:
+	if status != "RUNNING" or secondary_complete or mission_profile.is_empty():
+		return
+	var base := 3.0
+	match action:
+		"build":
+			base = 5.0
+		"repair":
+			base = 6.0
+		"rescue":
+			base = 7.0
+		"special":
+			base = 13.0
+		"vote":
+			base = 4.0
+	var focused := action == str(mission_profile.get("focus_action",""))
+	var gain := base * (2.4 if focused else 0.65)
+	secondary_progress = minf(secondary_goal,secondary_progress+gain)
+	crisis_level = maxf(0.0,crisis_level-gain*0.12)
+	if secondary_progress >= secondary_goal:
+		secondary_complete = true
+		_award_secondary_reward(user)
+	elif secondary_progress >= secondary_goal*0.5 and secondary_milestone == 0:
+		secondary_milestone = 1
+		_note(secondary_label + " • EQUIPE A MI-PARCOURS", "info")
+
+func _award_secondary_reward(user: String) -> void:
+	match str(mission_profile.get("reward","shield")):
+		"shield":
+			protection_seconds = maxf(protection_seconds,24.0)
+		"stabilize":
+			strength = minf(100.0,strength+22.0)
+		"supplies":
+			wood = minf(350.0,wood+48.0)
+		"rapid_build":
+			progress = minf(100.0,progress+18.0)
+		"priority_rescue":
+			if progress >= 99.9 and strength >= 20.0:
+				_enqueue_rescue(user,2)
+			else:
+				wood = minf(350.0,wood+35.0)
+	crisis_level = maxf(0.0,crisis_level-28.0)
+	_note(str(mission_profile.get("reward_title","BONUS COLLECTIF")) + " • BONUS GRATUIT ACTIVE !", "success")
+
+func _apply_crisis_incident() -> void:
+	var hazard := str(SCENARIOS[scenario_index].get("hazard_kind","crue"))
+	var penalty := float(mission_profile.get("crisis_penalty",4))
+	if protection_seconds > 0.0:
+		penalty *= 0.25
+	match hazard:
+		"crue":
+			flood_level = minf(1.0,flood_level+0.15)
+			strength = maxf(0.0,strength-penalty)
+		"glissement":
+			progress = maxf(0.0,progress-penalty*1.8)
+		"vent":
+			strength = maxf(0.0,strength-penalty*1.7)
+		"inondation":
+			flood_level = minf(1.0,flood_level+0.18)
+			strength = maxf(0.0,strength-penalty*0.85)
+		"tsunami":
+			flood_level = minf(1.0,flood_level+0.25)
+			strength = maxf(0.0,strength-penalty*2.0)
+		"brouillard":
+			strength = maxf(0.0,strength-penalty*0.7)
+		"blackout":
+			progress = maxf(0.0,progress-penalty*1.5)
+		"ouragan":
+			strength = maxf(0.0,strength-penalty*1.8)
+		"pression":
+			hazard_pressure = minf(1.0,hazard_pressure+0.18)
+			strength = maxf(0.0,strength-penalty*1.25)
+		"seisme":
+			progress = maxf(0.0,progress-penalty*1.5)
+			strength = maxf(0.0,strength-penalty*0.8)
+		"panne":
+			wood = maxf(0.0,wood-penalty*4.0)
+			progress = maxf(0.0,progress-penalty*0.7)
+		"incendie":
+			wood = maxf(0.0,wood-penalty*4.5)
+			strength = maxf(0.0,strength-penalty)
+		"blizzard":
+			progress = maxf(0.0,progress-penalty)
+			wood = maxf(0.0,wood-penalty*2.0)
+		"cyclone":
+			strength = maxf(0.0,strength-penalty*2.0)
+			progress = maxf(0.0,progress-penalty)
+	crisis_trigger_count += 1
+	_note(str(mission_profile.get("crisis_name","NOUVEL INCIDENT")) + " • REPONSE COLLECTIVE !", "danger")
+
+func _tick_mission_director(delta: float) -> void:
+	if mission_profile.is_empty():
+		return
+	var ratio := elapsed/maxf(1.0,total_duration)
+	var next_phase := 0 if ratio < 0.30 else (1 if ratio < 0.68 else 2)
+	if next_phase != mission_phase:
+		mission_phase = next_phase
+		mission_phase_label = str((mission_profile.get("phases",[]) as Array)[mission_phase])
+		_note("ACTE %d/3 : %s" % [mission_phase+1,mission_phase_label], "info")
+	crisis_cooldown = maxf(0.0,crisis_cooldown-delta)
+	var gain := delta*float(mission_profile.get("risk_gain",0.08))
+	if secondary_complete:
+		gain *= 0.55
+	if mission_phase == 2:
+		gain *= 1.35
+	crisis_level = clampf(crisis_level+gain,0.0,100.0)
+	if crisis_level >= 68.0 and crisis_cooldown <= 0.0:
+		_apply_crisis_incident()
+		crisis_level = 28.0
+		crisis_cooldown = 28.0
+
 func build(user: String) -> bool:
 	if progress >= 99.9:
 		_note("CHANTIER TERMINE • UTILISE !rescue", "hint", user)
@@ -198,6 +332,7 @@ func build(user: String) -> bool:
 	_credit(user,int(gain))
 	if participants.has(user):
 		builder_points[user] = int(builder_points.get(user,0)) + int(gain)
+	_advance_secondary("build",user)
 	_note("@" + user + " CONSTRUIT +" + str(int(gain)) + "%", "build", user)
 	return true
 
@@ -215,6 +350,7 @@ func repair(user: String) -> bool:
 	_credit(user,int(gain))
 	if participants.has(user):
 		builder_points[user] = int(builder_points.get(user,0)) + int(gain)
+	_advance_secondary("repair",user)
 	_note("@" + user + " REPARE " + str(SCENARIOS[scenario_index]["site"]), "repair", user)
 	return true
 
@@ -233,6 +369,7 @@ func rescue(user: String) -> bool:
 	_credit(user,7)
 	if participants.has(user):
 		rescuer_points[user] = int(rescuer_points.get(user,0)) + 7
+	_advance_secondary("rescue",user)
 	_note("@" + user + " LANCE UN SAUVETAGE !", "rescue", user)
 	return true
 
@@ -281,6 +418,7 @@ func special(user: String) -> bool:
 	if participants.has(user):
 		builder_points[user] = int(builder_points.get(user,0)) + 8
 	last_special = user
+	_advance_secondary("special",user)
 	_note("@" + user + " ACTIVE " + str(SCENARIOS[scenario_index]["special_label"]), "power", user)
 	return true
 
@@ -293,6 +431,7 @@ func vote(user: String, option: String) -> bool:
 	_credit(user,2)
 	_note("@" + user + " VOTE " + option, "vote", user)
 	if int(votes[option]) >= 3:
+		_advance_secondary("vote",user)
 		match option:
 			"1":
 				strength = minf(100.0,strength+14.0)
@@ -376,7 +515,9 @@ func tick(delta: float) -> void:
 		strength = maxf(0.0,strength-damage)
 		weather_stage = next_disaster+1
 		next_disaster += 1
+		crisis_level = minf(100.0,crisis_level+9.0+float(next_disaster)*4.0)
 		_note("ALERTE %d/3 • %s !" % [next_disaster, str(SCENARIOS[scenario_index]["event_text"])], "danger")
+	_tick_mission_director(d)
 	if demo_mode:
 		_tick_demo()
 	var max_simultaneous := 1 if str(SCENARIOS[scenario_index]["site_type"])=="helipad" else 3
@@ -402,7 +543,10 @@ func tick(delta: float) -> void:
 		# until real players repair it. Civilian positions remain stable meanwhile.
 		var safe_crossing := progress >= 99.9 and strength >= 20.0
 		if safe_crossing:
-			crossing["p"] = minf(1.0,float(crossing["p"])+d*float(crossing["speed"]))
+			var rescue_factor := float(mission_profile.get("rescue_speed_multiplier",1.0))
+			if secondary_complete:
+				rescue_factor = maxf(1.0,rescue_factor)
+			crossing["p"] = minf(1.0,float(crossing["p"])+d*float(crossing["speed"])*rescue_factor)
 		if float(crossing["p"]) >= 1.0 and (arrival_gate.is_null() or bool(arrival_gate.call(int(crossing.get("person_index",-1))))):
 			crossings.erase(crossing)
 			saved += 1
