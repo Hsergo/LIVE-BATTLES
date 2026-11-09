@@ -14,6 +14,7 @@ var state: RefCounted
 var live_mode := false
 var terrain: Node3D
 var civilians: Node3D
+var mission_setpiece: Node3D
 var rain: Array[MeshInstance3D] = []
 var light_refuge: OmniLight3D
 var camera: Camera3D
@@ -180,6 +181,7 @@ func _rebuild_world() -> void:
 	rescue_rotor = null
 	rain.clear()
 	civilians = null
+	mission_setpiece = null
 	# Avoid replaying old participants' work effects after a scene transition.
 	# New authentic events continue with monotonically increasing event_id.
 	last_event = int(state.get("event_id"))
@@ -239,6 +241,9 @@ func _rebuild_world() -> void:
 	_build_boats()
 	_build_environment_details()
 	_build_rescue_camps()
+	mission_setpiece = load("res://scripts/mission_setpieces.gd").new()
+	terrain.add_child(mission_setpiece)
+	mission_setpiece.call("setup",state)
 	civilians = load("res://scripts/villagers_3d.gd").new()
 	terrain.add_child(civilians)
 	civilians.call("setup",state,site_type)
@@ -881,6 +886,8 @@ func _process(delta: float) -> void:
 		lod_clock = 0.0
 		_update_worker_lod()
 	_animate_environment(d)
+	if mission_setpiece != null and is_instance_valid(mission_setpiece):
+		mission_setpiece.call("sync",d)
 	_animate_work_sparks(d)
 
 func visible_workers() -> int:
@@ -1020,6 +1027,11 @@ func _add_rail_collider(at: Vector3, box_size: Vector3) -> void:
 	collider.shape = shape
 	obstacle.add_child(collider)
 	terrain.add_child(obstacle)
+
+func mission_landmark_name() -> String:
+	if mission_setpiece == null or not is_instance_valid(mission_setpiece):
+		return ""
+	return str(mission_setpiece.get("identity"))
 
 func can_complete_evacuate(person_index: int) -> bool:
 	if civilians == null or not is_instance_valid(civilians):
