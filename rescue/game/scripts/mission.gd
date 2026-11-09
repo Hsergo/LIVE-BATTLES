@@ -523,7 +523,7 @@ func tick(delta: float) -> void:
 	var max_simultaneous := 1 if str(SCENARIOS[scenario_index]["site_type"])=="helipad" else 3
 	if rescue_queue > 0 and crossings.size() < max_simultaneous and progress >= 99.9 and strength >= 20.0:
 		rescue_queue -= 1
-		var owner := rescue_owners.pop_front() if not rescue_owners.is_empty() else ""
+		var owner: String = str(rescue_owners.pop_front()) if not rescue_owners.is_empty() else ""
 		var free_lane := 0
 		for candidate in range(3):
 			var occupied := false
