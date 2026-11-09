@@ -944,6 +944,7 @@ func _draw_lighthouse_scene() -> void:
 func _draw_hud_3d() -> void:
 	# Stream-first layout: the 3D scene is unobstructed from y=185 to y=1000.
 	_draw_compact_header_3d()
+	_draw_mission_challenge_3d()
 	_draw_3d_leaderboards()
 	if agent_message_life > 0.0:
 		_rect(18,186,684,35,Color("#0b313ab8"))
@@ -1022,3 +1023,24 @@ func _draw_footer_3d() -> void:
 	_text(str(state.call("scenario_info").get("material")) + " : %d" % int(state.get("wood")),
 		Vector2(28,1258),17,Color("#b3eadc"))
 	_text("F7 CAMERA 360  •  F10 MASQUER LES COMMANDES",Vector2(240,1258),14,Color("#c9e3e5"))
+
+func _draw_mission_challenge_3d() -> void:
+	var side_name := str(state.get("secondary_label"))
+	var achieved := float(state.get("secondary_progress"))
+	var goal := maxf(1.0,float(state.get("secondary_goal")))
+	var complete := bool(state.get("secondary_complete"))
+	var risk := clampf(float(state.get("crisis_level")),0.0,100.0)
+	var label := str(state.get("mission_phase_label"))
+	# One compact two-line card instead of a chat-style message stack.
+	_rect(18,231,684,64,Color("#09232bca"))
+	_rect(18,231,4,64,Color("#70d9ad") if complete else Color("#e4bb72"))
+	_text("ACTE %d/3  %s" % [int(state.get("mission_phase"))+1,label.substr(0,36)],
+		Vector2(32,253),15,Color("#d2eeef"))
+	_text("RISQUE  %d%%" % int(risk),Vector2(559,253),15,
+		Color("#ffb9a6") if risk>=58.0 else Color("#d7e6dc"))
+	_text(("BONUS ACTIF • " if complete else "") + side_name.substr(0,28),
+		Vector2(32,281),15,Color("#fff1bf"))
+	_rect(360,270,220,7,Color("#213c46"))
+	_rect(360,270,220*clampf(achieved/goal,0,1),7,
+		Color("#7cdab3") if complete else Color("#eabe77"))
+	_text("%d%%" % int(100.0*achieved/goal),Vector2(593,282),15,Color("#e3f4ea"))

@@ -74,6 +74,12 @@ func tick(delta: float, game: RefCounted, is_live: bool) -> String:
 	var target := int(game.get("target"))
 	if strength < 36.0:
 		return "AGENT SECURITE : SOLIDITE CRITIQUE ! TAPE !repair."
+	var risk := float(game.get("crisis_level"))
+	var profile: Dictionary = game.get("mission_profile")
+	if not profile.is_empty() and risk >= 54.0 and not bool(game.get("secondary_complete")):
+		var focus := str(profile.get("focus_action","build"))
+		var command := str(game.call("scenario_info").get("special","!special")) if focus=="special" else "!"+focus
+		return "AGENT STRATEGIE : " + str(profile.get("side_title","OBJECTIF D'EQUIPE")).substr(0,30) + " • " + command
 	if is_live and clock >= gift_nudge_at and game.get("participants").size() > 0:
 		gift_nudge_at = clock + 90.0
 		return "CADEAU FACULTATIF : ROSE = MATERIAUX. !build EST GRATUIT."
