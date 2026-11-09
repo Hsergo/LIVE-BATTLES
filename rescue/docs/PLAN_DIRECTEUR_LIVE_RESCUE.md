@@ -101,8 +101,8 @@ Godot 4.7.2 stable est disponible depuis le 18 août 2026. Les mises à niveau d
 |---|---|---|---|
 | J0 | Architecture, dépôt et compilation Windows | ✅ Existants | Compilation GitHub vérifiée |
 | J1 | 15 missions dans catalogue, 5 sites, commandes spéciales | 🟡 Codés, validation CI à terminer | 15 chargements + événements et sauvegarde des scènes |
-| J2 | Gameplay 3 phases par mission et crises réellement différentes | ⬜ À développer | 15 parties automatisées gagnées/perdues, sans blocage |
-| J3 | Direction artistique, modèles riggés, animation et caméra 360 | 🟡 Caméra/3D procédurale existantes ; assets pros non intégrés | Contrôle sur PC Windows, lisibilité 9:16, FPS |
+| J2 | Gameplay 3 phases par mission et crises réellement différentes | 🟡 15 objectifs secondaires, 15 crises distinctes, 15 repères 3D codés ; 11 suites de tests source réussies | Équilibrage 2 h, tests visuels Windows et vrais joueurs restent nécessaires |
+| J3 | Direction artistique, modèles riggés, animation et caméra 360 | 🟡 Caméra/3D procédurale, 15 repères uniques, modèles riggés partiels ; assets pros non intégrés | Contrôle sur PC Windows, lisibilité 9:16, FPS |
 | J4 | Système de personnages pour 50+ spectateurs | 🟡 Comptage et rendu basiques ; stress test réel manquant | 50/100/500 participants simulés, aucun événement perdu |
 | J5 | Cadeaux spectaculaires, classement et équité | 🟡 Matériaux et classements existants, équilibrage manquant | Test dons réels, déduplication, aucun blocage payant |
 | J6 | Agents IA, accueil et chatbot TikFinity | 🟡 Agents d'affichage existants, chat TikTok non connecté en écriture | Test de `!regles` et de la fonction chatbot depuis un vrai LIVE |
@@ -129,3 +129,12 @@ Godot 4.7.2 stable est disponible depuis le 18 août 2026. Les mises à niveau d
 **Créateur (minimum nécessaire) :** installer et ouvrir la build, lancer un LIVE TikTok authentifié, connecter TikFinity Desktop au compte réel, confirmer que les commentaires et cadeaux sont reçus, envoyer une capture ou un enregistrement des problèmes d'affichage. Ni programmation ni Blender exigés.
 
 **Lien du dossier maître :** `rescue/docs/PLAN_DIRECTEUR_LIVE_RESCUE.md`.
+
+
+## État du jalon J2 — 9 novembre 2026
+
+- Quatre modes de contribution gratuite : construction, réparation, secours et action spéciale ; progression de l'objectif secondaire différente pour chaque mission.
+- Trois actes nommés par mission ; niveau de crise, incidents et conséquences spécifiques, renfort collectif gratuit sans cadeau obligatoire.
+- Quinze repères 3D procéduraux avec progression de chantier visible et signaux de danger.
+- **Validation du code source :** onze suites Godot headless réussies sur la branche de production, run https://github.com/Hsergo/LIVE-BATTLES/actions/runs/42693933282 (aucun export Windows).
+- **Non validé :** réalisme graphique, rythme réel sur 2 h, latence TikFinity et performances du PC Windows. Ces tests sont les portes d'entrée du jalon suivant ; ne pas déclarer le jeu 1.0 complet.

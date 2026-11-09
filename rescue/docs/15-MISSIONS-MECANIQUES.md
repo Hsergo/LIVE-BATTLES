@@ -1,7 +1,11 @@
 # MISSION SAUVETAGE LIVE — Les 15 mécaniques de mission
 **Branche :** `production/characters-and-rescue-3d` — jalon de production **non compilé**.
 
-Ce tableau est synchronisé avec `game/scripts/mission_dynamics.gd`. Il ne faut pas confondre **mécaniques codées** et **tests d'exécution validés** : ce jalon réclame encore la recette Godot headless et un contrôle visuel Windows.
+Ce tableau est synchronisé avec `game/scripts/mission_dynamics.gd`. **Les 11 suites de tests automatisés Godot 4.5.2 passent** (source QA run #4, 9 novembre 2026), notamment les 15 mécaniques, les scènes 3D, la foule, les embarquements et les arrivées physiques.
+
+Preuve : https://github.com/Hsergo/LIVE-BATTLES/actions/runs/42693933282
+
+**Cela ne valide pas encore le rendu sur le GPU Windows, un vrai LIVE TikTok ou la qualité visuelle finale.** Aucune compilation Windows nouvelle n'a été déclenchée.
 
 ## Les 15 boucles de jeu
 
