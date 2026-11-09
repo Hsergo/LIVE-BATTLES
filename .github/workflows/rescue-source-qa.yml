@@ -32,7 +32,7 @@ jobs:
             res://tests/mission_rules.gd \
             res://tests/campaign_playtest.gd; do
             echo "SOURCE QA: $script"
-            ./Godot_v4.5.2-stable_linux.x86_64 --headless --path rescue/game --script "$script"
+            timeout 75s ./Godot_v4.5.2-stable_linux.x86_64 --headless --path rescue/game --script "$script"
           done
       - name: Verify 3D civilians, scene, physical arrival and crew
         run: |
@@ -46,5 +46,5 @@ jobs:
             res://tests/rescue_choreography_qa.gd \
             res://tests/view_smoke.gd; do
             echo "SOURCE QA: $script"
-            ./Godot_v4.5.2-stable_linux.x86_64 --headless --path rescue/game --script "$script"
+            timeout 75s ./Godot_v4.5.2-stable_linux.x86_64 --headless --path rescue/game --script "$script"
           done
