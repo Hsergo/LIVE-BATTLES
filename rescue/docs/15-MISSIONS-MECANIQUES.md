@@ -1,7 +1,7 @@
 # MISSION SAUVETAGE LIVE — Les 15 mécaniques de mission
 **Branche :** `production/characters-and-rescue-3d` — jalon de production **non compilé**.
 
-Ce tableau est synchronisé avec `game/scripts/mission_dynamics.gd`. **Les 11 suites de tests automatisés Godot 4.5.2 passent** (source QA run #4, 9 novembre 2026), notamment les 15 mécaniques, les scènes 3D, la foule, les embarquements et les arrivées physiques.
+Ce tableau est synchronisé avec `game/scripts/mission_dynamics.gd`. La validation initiale comprend **11 suites de tests automatisés Godot 4.5.2 réussies** (source QA run #4, 9 novembre 2026), notamment les 15 mécaniques, les scènes 3D, la foule, les embarquements et les arrivées physiques. Le lot suivant ajoute l'adaptation à la participation : [12 suites locales réussies et 49 parties sans cadeau](RYTHME_ET_DIFFICULTE.md).
 
 Preuve : https://github.com/Hsergo/LIVE-BATTLES/actions/runs/42693933282
 
@@ -29,7 +29,7 @@ Preuve : https://github.com/Hsergo/LIVE-BATTLES/actions/runs/42693933282
 
 ### Les trois actes de chaque niveau
 
-Chaque mission affiche trois actes spécifiques, définis dans le catalogue `mission_dynamics.gd`. Les transitions sont calculées autour de 30 % puis de 68 % du temps du niveau, avec indication discrète sur le HUD. Les mêmes commandes `!build`, `!repair`, `!rescue`, `!escort / !pump / !signal / !valve / !launch` restent disponibles tout au long de la partie, sans cadeau obligatoire.
+Chaque mission affiche trois actes spécifiques, définis dans le catalogue `mission_dynamics.gd`. L'acte II commence à 55 % de construction ou à 30 % du temps du niveau ; l'acte III commence au départ d'une évacuation autorisée ou à 68 % du temps. L'acte ne recule jamais après un incident. Les mêmes commandes `!build`, `!repair`, `!rescue`, `!escort / !pump / !signal / !valve / !launch` restent disponibles tout au long de la partie, sans cadeau obligatoire.
 
 ### La jauge d'objectif collectif
 

@@ -964,13 +964,13 @@ func _draw_hud_3d() -> void:
 
 func _draw_3d_leaderboards() -> void:
 	var audience: int = int(state.get("participants").size())
-	var shown: int = int(world_3d.call("visible_workers")) if world_3d != null else 0
+	var active: int = int(state.call("active_players"))
 	var people_safe: int = int(state.get("saved"))
 	var on_way: int = int(world_3d.call("crossing_civilians")) if world_3d != null else 0
 	var waiting: int = maxi(0,int(state.get("target"))-people_safe-on_way)
 	_rect(18,1058,684,119,Color("#071b2ad8"))
 	_rect(18,1058,684,3,Color("#badebe"))
-	_text("%d JOUEURS • %d OUVRIERS  |  %d ATTENDENT • %d EN ROUTE • %d SAUVES" % [audience,shown,waiting,on_way,people_safe],
+	_text("%d JOUEURS • %d ACTIFS  |  %d ATTENDENT • %d EN ROUTE • %d SAUVES" % [audience,active,waiting,on_way,people_safe],
 		Vector2(32,1083),15,Color("#ecf8ec"))
 	var builders: Array[String] = state.call("top_builders",2)
 	var donors: Array[String] = state.call("top_donors",2)

@@ -35,3 +35,15 @@ Le dépôt est passé en **phase de direction artistique et de production des PN
 Les nouveaux personnages restent **stylisés/procéduraux**. Un personnage professionnel texturé et riggé n'est pas encore importé, et aucun test de rendu final Windows n'a été effectué pour cette phase.
 
 **Production riggée, sans compilation Windows :** modèle GLB CC0 importé, pilotage de Skeleton3D, collisions des ouvrages, évacuation suspendue si la structure est dangereuse. Voir docs/DIRECTION_ARTISTIQUE_PERSONNAGES.md et game/tests/art_production_qa.gd (test non exécuté).
+
+## Dernier lot de sources — 9 novembre 2026
+
+La branche de production comprend désormais 15 missions et un rythme adapté aux
+actions gratuites réellement acceptées. Les actes suivent aussi l'avancement du
+chantier et des évacuations. **12 suites Godot source réussies**, dont 49 parties
+simulées sans cadeau et un test de baisse de 500 à 5 participants actifs.
+
+Voir [rythme, mesures et limites](docs/RYTHME_ET_DIFFICULTE.md). Ce lot n'a pas été
+exporté en nouvel installateur Windows ; la V0.4 reste une livraison antérieure.
+Les états « test non exécuté » plus haut décrivent les étapes historiques de la
+production. Ils sont remplacés par ce bilan pour les suites qu'il recense.

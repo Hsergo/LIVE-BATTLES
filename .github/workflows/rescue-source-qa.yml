@@ -29,6 +29,7 @@ jobs:
           for script in \
             res://tests/catalog_rules.gd \
             res://tests/mission_dynamics_qa.gd \
+            res://tests/mission_pacing_qa.gd \
             res://tests/mission_rules.gd \
             res://tests/campaign_playtest.gd; do
             echo "SOURCE QA: $script"

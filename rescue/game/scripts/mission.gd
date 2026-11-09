@@ -15,7 +15,9 @@ const RESCUE_COOLDOWN := 2.6
 const DISASTER_STAGES := [0.35, 0.68, 0.88]
 const Catalog = preload("res://scripts/mission_catalog.gd")
 const Dynamics = preload("res://scripts/mission_dynamics.gd")
+const Pacing = preload("res://scripts/mission_pacing.gd")
 const SCENARIOS = Catalog.LEVELS
+var pacing := Pacing.new()
 var demo_mode := true
 var hazard_pressure := 0.0
 var last_special := ""
@@ -86,6 +88,7 @@ func configure(is_demo: bool) -> void:
 
 func _start_mission(reset_people: bool) -> void:
 	if reset_people:
+		pacing.reset(demo_mode)
 		participants.clear()
 		contribution.clear()
 		builder_points.clear()
@@ -181,6 +184,8 @@ func _eligible(user: String, command: String, cool: float) -> bool:
 	cooldowns[key] = now
 	last_user = user
 	action_sequence += 1
+	if participants.has(user):
+		pacing.record_action(user)
 	return true
 
 func _credit(user: String, amount: int) -> void:
@@ -223,7 +228,7 @@ func _advance_secondary(action: String, user: String) -> void:
 		"vote":
 			base = 4.0
 	var focused := action == str(mission_profile.get("focus_action",""))
-	var gain := base * (2.4 if focused else 0.65)
+	var gain := pacing.work_gain(base * (2.4 if focused else 0.65))
 	secondary_progress = minf(secondary_goal,secondary_progress+gain)
 	crisis_level = maxf(0.0,crisis_level-gain*0.12)
 	if secondary_progress >= secondary_goal:
@@ -242,7 +247,7 @@ func _award_secondary_reward(user: String) -> void:
 		"supplies":
 			wood = minf(350.0,wood+48.0)
 		"rapid_build":
-			progress = minf(100.0,progress+18.0)
+			progress = minf(100.0,progress+pacing.work_gain(18.0))
 		"priority_rescue":
 			if progress >= 99.9 and strength >= 20.0:
 				_enqueue_rescue(user,2)
@@ -253,7 +258,7 @@ func _award_secondary_reward(user: String) -> void:
 
 func _apply_crisis_incident() -> void:
 	var hazard := str(SCENARIOS[scenario_index].get("hazard_kind","crue"))
-	var penalty := float(mission_profile.get("crisis_penalty",4))
+	var penalty := float(mission_profile.get("crisis_penalty",4)) * pacing.pressure_scale
 	if protection_seconds > 0.0:
 		penalty *= 0.25
 	match hazard:
@@ -301,13 +306,15 @@ func _tick_mission_director(delta: float) -> void:
 	if mission_profile.is_empty():
 		return
 	var ratio := elapsed/maxf(1.0,total_duration)
-	var next_phase := 0 if ratio < 0.30 else (1 if ratio < 0.68 else 2)
-	if next_phase != mission_phase:
-		mission_phase = next_phase
+	var ready_to_depart := rescue_queue > 0 and progress >= 99.9 and strength >= 20.0
+	var evacuation_started := saved > 0 or ready_to_depart or not crossings.is_empty()
+	var next_phase := Pacing.phase_for(mission_phase, ratio, progress, evacuation_started)
+	while mission_phase < next_phase:
+		mission_phase += 1
 		mission_phase_label = str((mission_profile.get("phases",[]) as Array)[mission_phase])
 		_note("ACTE %d/3 : %s" % [mission_phase+1,mission_phase_label], "info")
 	crisis_cooldown = maxf(0.0,crisis_cooldown-delta)
-	var gain := delta*float(mission_profile.get("risk_gain",0.08))
+	var gain := delta*float(mission_profile.get("risk_gain",0.08))*pacing.pressure_scale
 	if secondary_complete:
 		gain *= 0.55
 	if mission_phase == 2:
@@ -328,12 +335,13 @@ func build(user: String) -> bool:
 	if wood >= 6.0:
 		wood -= 6.0
 		gain = 6.0
-	progress = minf(100.0,progress+gain)
+	var applied := minf(100.0-progress,pacing.work_gain(gain))
+	progress += applied
 	_credit(user,int(gain))
 	if participants.has(user):
 		builder_points[user] = int(builder_points.get(user,0)) + int(gain)
 	_advance_secondary("build",user)
-	_note("@" + user + " CONSTRUIT +" + str(int(gain)) + "%", "build", user)
+	_note("@" + user + " CONSTRUIT +%.2f%%" % applied, "build", user)
 	return true
 
 func repair(user: String) -> bool:
@@ -346,7 +354,7 @@ func repair(user: String) -> bool:
 	if wood >= 4.0:
 		wood -= 4.0
 		gain = 9.0
-	strength = minf(100.0,strength+gain)
+	strength = minf(100.0,strength+pacing.work_gain(gain))
 	_credit(user,int(gain))
 	if participants.has(user):
 		builder_points[user] = int(builder_points.get(user,0)) + int(gain)
@@ -391,26 +399,26 @@ func special(user: String) -> bool:
 		"bridge":
 			if progress < 99.9:
 				gain = 5.0
-				progress = minf(100.0,progress+gain)
+				progress = minf(100.0,progress+pacing.work_gain(gain))
 			elif saved + rescue_queue + crossings.size() < target:
 				_enqueue_rescue(user,1)
-			strength = minf(100.0,strength+4.0)
+			strength = minf(100.0,strength+pacing.work_gain(4.0))
 		"dike":
-			strength = minf(100.0,strength+10.0)
-			hazard_pressure = maxf(0.0,hazard_pressure-0.18)
+			strength = minf(100.0,strength+pacing.work_gain(10.0))
+			hazard_pressure = maxf(0.0,hazard_pressure-pacing.work_gain(0.18))
 			protection_seconds = maxf(protection_seconds,5.0)
 		"lighthouse":
 			if progress < 99.9:
-				progress = minf(100.0,progress+5.0)
+				progress = minf(100.0,progress+pacing.work_gain(5.0))
 			elif saved + rescue_queue + crossings.size() < target:
 				_enqueue_rescue(user,1)
 			protection_seconds = maxf(protection_seconds,7.0)
 		"dam":
-			strength = minf(100.0,strength+12.0)
-			hazard_pressure = maxf(0.0,hazard_pressure-0.27)
+			strength = minf(100.0,strength+pacing.work_gain(12.0))
+			hazard_pressure = maxf(0.0,hazard_pressure-pacing.work_gain(0.27))
 		"helipad":
 			if progress < 99.9:
-				progress = minf(100.0,progress+5.0)
+				progress = minf(100.0,progress+pacing.work_gain(5.0))
 			else:
 				_enqueue_rescue(user,2)
 			protection_seconds = maxf(protection_seconds,4.0)
@@ -423,9 +431,9 @@ func special(user: String) -> bool:
 	return true
 
 func vote(user: String, option: String) -> bool:
-	if not _eligible(user,"vote",3.0):
-		return false
 	if not votes.has(option):
+		return false
+	if not _eligible(user,"vote",3.0):
 		return false
 	votes[option] += 1
 	_credit(user,2)
@@ -434,10 +442,10 @@ func vote(user: String, option: String) -> bool:
 		_advance_secondary("vote",user)
 		match option:
 			"1":
-				strength = minf(100.0,strength+14.0)
+				strength = minf(100.0,strength+pacing.work_gain(14.0))
 				_note("CHOIX COLLECTIF : PILIERS RENFORCES", "success")
 			"2":
-				progress = minf(100.0,progress+10.0)
+				progress = minf(100.0,progress+pacing.work_gain(10.0))
 				_note("CHOIX COLLECTIF : GRUE RAPIDE", "success")
 			"3":
 				_enqueue_rescue(user,2)
@@ -470,7 +478,7 @@ func gift(user: String, gift_name: String, count: int = 1) -> bool:
 		bridge_gates += 1
 	if supply_level >= POWER_COSTS[1]:
 		supply_level -= POWER_COSTS[1]
-		progress = minf(100.0,progress+16.0)
+		progress = minf(100.0,progress+pacing.work_gain(16.0))
 		_note("SUPER GRUE • CONSTRUCTION ACCELEREE !", "power")
 	elif supply_level >= POWER_COSTS[0]:
 		supply_level -= POWER_COSTS[0]
@@ -480,6 +488,7 @@ func gift(user: String, gift_name: String, count: int = 1) -> bool:
 
 func tick(delta: float) -> void:
 	var d := clampf(delta,0.0,0.1)
+	pacing.tick(d)
 	for item in events:
 		item["life"] = maxf(0,float(item["life"])-d)
 	if status == "RESULT":
@@ -502,6 +511,7 @@ func tick(delta: float) -> void:
 	flood_level = clampf(flood_level + hazard_pressure * 0.06,0.0,1.0)
 	if next_disaster < stage_limits.size() and elapsed/duration >= stage_limits[next_disaster]:
 		var damage := (18.0+float(next_disaster)*9.0) * float(SCENARIOS[scenario_index]["hazard"])
+		damage *= pacing.pressure_scale
 		damage *= (1.0 + hazard_pressure * 0.55)
 		match str(SCENARIOS[scenario_index]["hazard_kind"]):
 			"seisme","glissement":
@@ -605,6 +615,9 @@ func ranking(limit: int = 3) -> Array[String]:
 
 func scenario_info() -> Dictionary:
 	return SCENARIOS[scenario_index].duplicate()
+
+func active_players() -> int:
+	return pacing.active_count
 
 func top_builders(limit: int = 3) -> Array[String]:
 	return _leaders(builder_points,limit)
