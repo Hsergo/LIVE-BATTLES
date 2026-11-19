@@ -1,7 +1,13 @@
 name: MISSION SAUVETAGE LIVE — Windows
-# Build and package only when explicitly triggered after art-production review.
+# User authorized compilation after implementation and source validation.
+# Ordinary production commits still do not export Windows.
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - release/rescue-v0.5-20261119
+permissions:
+  contents: read
 jobs:
   build:
     runs-on: windows-latest
@@ -10,191 +16,111 @@ jobs:
       run:
         shell: pwsh
     steps:
-      - name: Recuperer le depot
-        uses: actions/checkout@v4
-
-      - name: Installer Node.js 22
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
-
-      - name: Verifier la passerelle TikTok
-        working-directory: rescue/bridge
-        run: |
-          npm install --no-audit --no-fund
-          if ($LASTEXITCODE -ne 0) { throw "npm install echoue" }
-          npm test
-          if ($LASTEXITCODE -ne 0) { throw "Tests Node echoues" }
-
-      - name: Preparer Godot 4.5.2 et templates Windows
+      - name: Test bridge and source contracts
         run: |
           $ErrorActionPreference = 'Stop'
-          $version = '4.5.2-stable'
-          $url = "https://github.com/godotengine/godot/releases/download/$version"
-          New-Item -ItemType Directory -Force tools/rescue-godot | Out-Null
-          Invoke-WebRequest -Uri "$url/Godot_v4.5.2-stable_win64.exe.zip" -OutFile godot.zip
-          Expand-Archive godot.zip -DestinationPath tools/rescue-godot -Force
-          Invoke-WebRequest -Uri "$url/Godot_v4.5.2-stable_export_templates.tpz" -OutFile templates.tpz
-          Copy-Item templates.tpz templates.zip
-          Expand-Archive templates.zip -DestinationPath tools/rescue-templates -Force
-          $destination = Join-Path $env:APPDATA 'Godot\export_templates\4.5.2.stable'
+          Push-Location rescue/bridge
+          npm ci --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'npm ci failed' }
+          npm test
+          if ($LASTEXITCODE -ne 0) { throw 'Bridge tests failed' }
+          Pop-Location
+          node rescue/tools/production-preflight.js
+          if ($LASTEXITCODE -ne 0) { throw 'Preflight failed' }
+      - name: Prepare pinned Godot and Windows templates
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://github.com/godotengine/godot/releases/download/4.5.2-stable'
+          Invoke-WebRequest "$url/Godot_v4.5.2-stable_win64.exe.zip" -OutFile godot.zip
+          Expand-Archive godot.zip tools/rescue-godot -Force
+          Invoke-WebRequest "$url/Godot_v4.5.2-stable_export_templates.tpz" -OutFile templates.zip
+          Expand-Archive templates.zip tools/rescue-templates -Force
+          $destination = Join-Path $env:APPDATA 'Godot/export_templates/4.5.2.stable'
           New-Item -ItemType Directory -Force $destination | Out-Null
           Copy-Item tools/rescue-templates/templates/* $destination -Recurse -Force
-
-      - name: Tester le modele des missions
+          $godot = (Get-ChildItem tools/rescue-godot -Recurse -Filter '*_win64_console.exe' | Select-Object -First 1).FullName
+          if (-not $godot) { throw 'Godot console missing' }
+          "RESCUE_GODOT=$godot" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Import resources and run every Godot suite
+        run: |
+          python rescue/tools/run-godot-qa.py --godot $env:RESCUE_GODOT --output qa-logs
+          if ($LASTEXITCODE -ne 0) { throw 'Godot source tests failed' }
+      - name: Export release executable
         run: |
           $ErrorActionPreference = 'Stop'
-          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
-          if (-not $godot) { throw 'Godot console non trouve' }
-          & $godot.FullName --headless --path rescue/game --script res://tests/mission_rules.gd
-          if ($LASTEXITCODE -ne 0) { throw 'Regles de la mission invalides' }
-
-      - name: Tester les mecanismes des 15 missions et decors uniques
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
-          & $godot.FullName --headless --path rescue/game --script res://tests/mission_dynamics_qa.gd
-          if ($LASTEXITCODE -ne 0) { throw 'Missions uniques invalides' }
-
-      - name: Verifier les 15 niveaux et les 5 decors
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
-          if (-not $godot) { throw 'Godot absent' }
-          & $godot.FullName --headless --path rescue/game --script res://tests/catalog_rules.gd
-          if ($LASTEXITCODE -ne 0) { throw 'Catalogue de campagne invalide' }
-
-      - name: Simuler 15 missions jouables sans paiement
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
-          if (-not $godot) { throw 'Godot absent' }
-          & $godot.FullName --headless --path rescue/game --script res://tests/campaign_playtest.gd
-          if ($LASTEXITCODE -ne 0) { throw 'Campagne 15 missions ne termine pas' }
-
-      - name: Tester les agents autonomes locaux
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
-          if (-not $godot) { throw 'Godot absent' }
-          & $godot.FullName --headless --path rescue/game --script res://tests/agents_rules.gd
-          if ($LASTEXITCODE -ne 0) { throw 'Agents de mission invalides' }
-
-      - name: Importer et exporter le jeu Windows
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
-          if (-not $godot) { throw 'Godot console non trouve' }
-          $project = (Resolve-Path rescue/game).Path
           New-Item -ItemType Directory -Force dist-rescue/game | Out-Null
-          & $godot.FullName --headless --path $project --import --verbose
-          if ($LASTEXITCODE -ne 0) { Write-Warning "Import renvoie $LASTEXITCODE" }
-          & $godot.FullName --headless --path $project --export-release 'Windows Desktop' (Join-Path $PWD 'dist-rescue/game/MissionSauvetage.exe')
-          if ($LASTEXITCODE -ne 0 -or -not (Test-Path dist-rescue/game/MissionSauvetage.exe)) { throw 'Export Windows du jeu echoue' }
-
-      - name: Valider les personnages 3D et l'evacuation
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
-          & $godot.FullName --headless --path rescue/game --script res://tests/character_stage_qa.gd
-          if ($LASTEXITCODE -ne 0) { throw 'Recette personnages 3D invalide' }
-          & $godot.FullName --headless --path rescue/game --script res://tests/crowd_physics_rules.gd
-          if ($LASTEXITCODE -ne 0) { throw 'Collisions personnages invalides' }
-
-      - name: Verifier l'arrivee physique avant de compter les sauveteurs
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
-          & $godot.FullName --headless --path rescue/game --script res://tests/physical_arrival_qa.gd
-          if ($LASTEXITCODE -ne 0) { throw 'Confirmation des arrives physiques invalide' }
-
-      - name: Stress visuel 60 spectateurs avec LOD des 48 ouvriers
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
-          & $godot.FullName --headless --path rescue/game --script res://tests/crew_lod_qa.gd
-          if ($LASTEXITCODE -ne 0) { throw 'Allocation des travailleurs par niveau de detail invalide' }
-
-      - name: Recette des embarquements, escorts et publics nombreux
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
-          & $godot.FullName --headless --path rescue/game --script res://tests/rescue_choreography_qa.gd
-          if ($LASTEXITCODE -ne 0) { throw 'Evacuation et attribution des points invalides' }
-          & $godot.FullName --headless --path rescue/game --script res://tests/rescue_routes_qa.gd
-          if ($LASTEXITCODE -ne 0) { throw 'Routes d evacuation invalides' }
-
-      - name: Tester la scene et l'interaction locale
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $godot = Get-ChildItem tools/rescue-godot -Recurse -Filter 'Godot*_win64_console.exe' | Select-Object -First 1
-          & $godot.FullName --headless --path rescue/game --script res://tests/view_smoke.gd
-          if ($LASTEXITCODE -ne 0) { throw 'Test de scene / TikTok echoue' }
-          $bridge = Start-Process (Get-Command node).Source -ArgumentList 'index.js' -WorkingDirectory (Join-Path $PWD 'rescue/bridge') -WindowStyle Hidden -PassThru
-          try {
-            Start-Sleep -Seconds 2
-            $health = Invoke-RestMethod -Uri 'http://127.0.0.1:8766/health'
-            if (-not $health.ok) { throw 'Serveur local hors service' }
-            $body = '{"type":"comment","username":"TestConstructeur","text":"!join"}'
-            $post = Invoke-RestMethod -Uri 'http://127.0.0.1:8766/simulate' -Method Post -ContentType 'application/json' -Body $body
-            if (-not $post.ok) { throw 'Commandes de simulation en echec' }
-            $body = '{"type":"gift","username":"TestConstructeur","gift_name":"Rose","count":3}'
-            $post = Invoke-RestMethod -Uri 'http://127.0.0.1:8766/simulate' -Method Post -ContentType 'application/json' -Body $body
-            if (-not $post.ok) { throw 'Cadeau de simulation en echec' }
-            $exe = Join-Path $PWD 'dist-rescue/game/MissionSauvetage.exe'
-            $log = Join-Path $PWD 'rescue-smoke.log'
-            $p = Start-Process $exe -ArgumentList @('--headless','--quit-after','180','--log-file',$log) -PassThru -Wait
-            if (Test-Path $log) { Get-Content $log | Select-Object -Last 120 }
-            if ($p.ExitCode -ne 0) { throw "Executable non fonctionnel: $($p.ExitCode)" }
-            if (Test-Path $log) {
-              if (Select-String -Path $log -Pattern 'SCRIPT ERROR|Parse Error|Invalid call' -Quiet) {
-                throw 'Erreur Godot detectee dans le jeu Windows'
-              }
-            }
-          } finally {
-            if ($bridge -and -not $bridge.HasExited) { Stop-Process $bridge.Id -Force -ErrorAction SilentlyContinue }
+          & $env:RESCUE_GODOT --headless --path rescue/game --export-release 'Windows Desktop' (Join-Path $PWD 'dist-rescue/game/MissionSauvetage.exe')
+          if ($LASTEXITCODE -ne 0) { throw 'Windows export failed' }
+          foreach ($name in @('MissionSauvetage.exe','MissionSauvetage.pck')) {
+            if (-not (Test-Path "dist-rescue/game/$name")) { throw "Missing $name" }
           }
-
-      - name: Assembler le jeu autonome
+      - name: Assemble self-contained package and licenses
         run: |
           $ErrorActionPreference = 'Stop'
-          New-Item -ItemType Directory -Force dist-rescue/runtime,dist-rescue/bridge,dist-rescue/launcher,release-rescue | Out-Null
+          New-Item -ItemType Directory -Force dist-rescue/runtime,dist-rescue/bridge,dist-rescue/launcher,dist-rescue/licenses,release-rescue | Out-Null
           Copy-Item (Get-Command node).Source dist-rescue/runtime/node.exe
-          Copy-Item rescue/bridge/index.js dist-rescue/bridge/index.js
-          Copy-Item rescue/bridge/rules.js dist-rescue/bridge/rules.js
-          Copy-Item rescue/bridge/providers.js dist-rescue/bridge/providers.js
-          Copy-Item rescue/bridge/gifts.json dist-rescue/bridge/gifts.json
+          Copy-Item rescue/bridge/*.js,rescue/bridge/package*.json,rescue/bridge/gifts.json dist-rescue/bridge/
           Copy-Item rescue/bridge/node_modules dist-rescue/bridge/node_modules -Recurse
-          Copy-Item rescue/launcher/start.ps1 dist-rescue/launcher/start.ps1
-          Copy-Item rescue/launcher/DEMARRER-MISSION-SAUVETAGE.cmd dist-rescue/DEMARRER-MISSION-SAUVETAGE.cmd
-          Copy-Item rescue/README.md dist-rescue/README.md
-          Copy-Item rescue/docs/GUIDE_DEMARRAGE.md dist-rescue/GUIDE_DEMARRAGE.md
-          Compress-Archive dist-rescue/* release-rescue/MISSION-SAUVETAGE-LIVE-Portable-x64.zip -Force
-
-      - name: Installer Inno Setup
+          Copy-Item rescue/launcher/start.ps1 dist-rescue/launcher/
+          Copy-Item rescue/launcher/DEMARRER-MISSION-SAUVETAGE.cmd dist-rescue/
+          Copy-Item rescue/README.md dist-rescue/
+          Copy-Item rescue/docs/GUIDE_DEMARRAGE.md dist-rescue/GUIDE_DEMARRAGE.txt
+          Copy-Item rescue/docs/RECETTE_V05.md dist-rescue/RECETTE_V05.txt
+          Copy-Item rescue/game/assets/licenses/* dist-rescue/licenses/
+          $env:RESCUE_LICENSE_DIR = (Resolve-Path dist-rescue/licenses).Path
+          & $env:RESCUE_GODOT --headless --path rescue/game --script ((Resolve-Path rescue/tools/export_licenses.gd).Path)
+          if ($LASTEXITCODE -ne 0) { throw 'Godot license export failed' }
+          $nodeVersion = (& node --version).Trim()
+          Invoke-WebRequest "https://raw.githubusercontent.com/nodejs/node/$nodeVersion/LICENSE" -OutFile dist-rescue/licenses/NODE-LICENSE.txt
+          "Version: 0.5.0`nCommit: $env:GITHUB_SHA`nBuild: $env:GITHUB_RUN_ID`nGodot: 4.5.2`nNode: $nodeVersion" | Set-Content dist-rescue/BUILD.txt -Encoding utf8
+      - name: Smoke test packaged launcher and executable
+        timeout-minutes: 3
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & ./dist-rescue/launcher/start.ps1 -SmokeTest
+          $log = Join-Path $env:LOCALAPPDATA 'MissionSauvetageLIVE/logs/game.log'
+          if (-not (Test-Path $log)) { throw 'Game did not create a log' }
+          Copy-Item $log qa-logs/portable-smoke.log
+          if (Select-String $log -Pattern 'SCRIPT ERROR|Parse Error|Invalid call|^ERROR:' -Quiet) { throw 'Packaged game runtime error' }
+      - name: Create portable ZIP
+        run: Compress-Archive dist-rescue/* release-rescue/MISSION-SAUVETAGE-LIVE-0.5.0-Portable-x64.zip -Force
+      - name: Install Inno Setup
         run: |
           choco install innosetup -y --no-progress
-          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup indisponible' }
-
-      - name: Fabriquer l'installateur Windows
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup unavailable' }
+      - name: Build installer
         run: |
-          $compilers = @(
-            'C:\Program Files (x86)\Inno Setup 6\ISCC.exe',
-            'C:\Program Files\Inno Setup 6\ISCC.exe',
-            'C:\Program Files\Inno Setup 7\ISCC.exe',
-            'C:\Program Files (x86)\Inno Setup 7\ISCC.exe'
-          )
-          $compiler = $compilers | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $compiler) { throw 'Compilateur Inno non trouve' }
-          & $compiler rescue/installer/mission-sauvetage.iss
-          if ($LASTEXITCODE -ne 0) { throw 'Installateur Windows echoue' }
-          if (-not (Test-Path release-rescue/MISSION-SAUVETAGE-LIVE-Setup-x64.exe)) { throw 'Fichier Setup non cree' }
-
-      - name: Livrer le jeu Windows
-        uses: actions/upload-artifact@v4
+          $ErrorActionPreference = 'Stop'
+          $compiler = Get-ChildItem 'C:/Program Files (x86)/Inno Setup */ISCC.exe','C:/Program Files/Inno Setup */ISCC.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $compiler) { throw 'ISCC missing' }
+          & $compiler.FullName rescue/installer/mission-sauvetage.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Installer compilation failed' }
+      - name: Install and test installed launcher
+        timeout-minutes: 4
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = (Resolve-Path release-rescue/MISSION-SAUVETAGE-LIVE-0.5.0-Setup-x64.exe).Path
+          $destination = Join-Path $env:RUNNER_TEMP 'Rescue Install QA'
+          $installLog = Join-Path $PWD 'qa-logs/install.log'
+          $process = Start-Process $setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',('/DIR="'+$destination+'"'),('/LOG="'+$installLog+'"')) -PassThru -Wait
+          if ($process.ExitCode -ne 0) { throw "Install failed: $($process.ExitCode)" }
+          & (Join-Path $destination 'launcher/start.ps1') -SmokeTest
+          $log = Join-Path $env:LOCALAPPDATA 'MissionSauvetageLIVE/logs/game.log'
+          Copy-Item $log qa-logs/installed-smoke.log
+          if (Select-String $log -Pattern 'SCRIPT ERROR|Parse Error|Invalid call|^ERROR:' -Quiet) { throw 'Installed game runtime error' }
+          $manifest = Get-ChildItem release-rescue/* | Get-FileHash -Algorithm SHA256 | ForEach-Object { $_.Hash.ToLower() + '  ' + (Split-Path $_.Path -Leaf) }
+          $manifest | Set-Content release-rescue/SHA256SUMS.txt -Encoding ascii
+      - uses: actions/upload-artifact@v4
         with:
-          name: MISSION-SAUVETAGE-LIVE-WINDOWS
-          path: |
-            release-rescue/MISSION-SAUVETAGE-LIVE-Setup-x64.exe
-            release-rescue/MISSION-SAUVETAGE-LIVE-Portable-x64.zip
+          name: MISSION-SAUVETAGE-LIVE-0.5.0-WINDOWS
+          path: release-rescue/*
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RESCUE-WINDOWS-QA
+          path: qa-logs/

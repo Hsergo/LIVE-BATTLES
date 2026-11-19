@@ -1,5 +1,5 @@
 #define AppName "MISSION SAUVETAGE LIVE"
-#define AppVersion "0.4.0"
+#define AppVersion "0.5.0"
 [Setup]
 AppId={{EF938D1F-02A3-4EB2-9FA8-11204F8AA7CC}
 AppName={#AppName}
@@ -8,7 +8,7 @@ DefaultDirName={localappdata}\Programs\MISSION SAUVETAGE LIVE
 DefaultGroupName=MISSION SAUVETAGE LIVE
 PrivilegesRequired=lowest
 OutputDir=..\..\release-rescue
-OutputBaseFilename=MISSION-SAUVETAGE-LIVE-Setup-x64
+OutputBaseFilename=MISSION-SAUVETAGE-LIVE-0.5.0-Setup-x64
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

@@ -5,35 +5,40 @@ const fs = require('node:fs');
 const { WebSocketServer, WebSocket } = require('ws');
 const { commandOf, userOf, giftMaterials } = require('./rules');
 const { LiveProvider, PROVIDERS } = require('./providers');
+const { TtlCache } = require('./ttl-cache');
 
 const HOST = '127.0.0.1';
 const PORT = 8766;
 const gifts = JSON.parse(fs.readFileSync(path.join(__dirname,'gifts.json'),'utf8'));
 const metrics = { chat: 0, gift: 0, like: 0, follow: 0, share: 0, rejected: 0 };
-const seen = new Map(), cooldown = new Map();
+const seen = new TtlCache(16384,120000), cooldown = new TtlCache(8192,30000);
 let state = 'PASSERELLE DISPONIBLE • CHOISIS UN CONNECTEUR';
 let wss;
 function send(data) {
   if (!wss) return;
   const out = JSON.stringify({ ...data, timestamp: new Date().toISOString() });
-  for (const client of wss.clients) if (client.readyState === WebSocket.OPEN) client.send(out);
+  for (const client of wss.clients) if (client.readyState === WebSocket.OPEN) {
+    if (client.bufferedAmount > 1048576) {
+      client.close(1013,'Game too slow; reconnect');
+      continue;
+    }
+    client.send(out);
+  }
 }
 function updateStatus(message) {
   state = String(message).slice(0, 200);
   process.stdout.write('[SAUVETAGE] ' + state + '\n');
-  send({type:'status',message:state});
+  send({type:'status',message:state,connection:live.connectionStatus()});
 }
 function alreadySeen(id) {
   if (!id) return false;
-  const now = Date.now();
-  if (seen.size > 1500) for (const [k,t] of seen) if (now-t > 120000) seen.delete(k);
-  if (seen.has(id)) return true;
-  seen.set(id, now);
+  if (seen.get(id) !== undefined) return true;
+  seen.set(id, true);
   return false;
 }
 function pushCommand(user, comment, id=null, source='live') {
   const command = commandOf(comment), name = userOf(user);
-  if (!name || !command || alreadySeen(id)) { metrics.rejected++; return false; }
+  if (!name || !command || alreadySeen(id ? source+':chat:'+id : null)) { metrics.rejected++; return false; }
   const key = name + '|' + command, now = Date.now();
   if (command !== '!join' && now - (cooldown.get(key) || 0) < 850) return false;
   cooldown.set(key, now);
@@ -43,7 +48,7 @@ function pushCommand(user, comment, id=null, source='live') {
 }
 function pushGift(user, name, count, id=null, source='live') {
   const username = userOf(user), giftName = String(name||'').slice(0,64);
-  if (!username || !giftMaterials(giftName,gifts,count) || alreadySeen(id)) { metrics.rejected++; return false; }
+  if (!username || !giftMaterials(giftName,gifts,count) || alreadySeen(id ? source+':gift:'+id : null)) { metrics.rejected++; return false; }
   send({type:'event',event:'gift',user:username,gift_name:giftName,count:Math.min(1000,Math.max(1,Number(count)||1)),source});
   metrics.gift++;
   return true;
@@ -74,8 +79,8 @@ const server=http.createServer((req,res) => {
     res.end(JSON.stringify(obj));
   };
   if (req.method === 'GET' && req.url === '/health') {
-    return respond(200,{ok:true,status:state,providers:Object.keys(PROVIDERS),
-      connection:live.connectionStatus(),events:metrics,version:'0.3.0'});
+    return respond(200,{ok:true,app:'mission-sauvetage-live',status:state,providers:Object.keys(PROVIDERS),
+      connection:live.connectionStatus(),events:metrics,cache:{seen:seen.size,cooldown:cooldown.size},version:'0.5.0'});
   }
   if (req.method === 'POST' && req.url === '/simulate') {
     let input='';
@@ -93,7 +98,7 @@ wss=new WebSocketServer({server,maxPayload:8192});
 wss.on('connection', (socket, request)=>{
   // The Windows game has no browser Origin header. Reject cross-site browser control.
   if (request.headers.origin) { socket.close(1008,'Browser origin forbidden'); return; }
-  socket.send(JSON.stringify({type:'status',message:state}));
+  socket.send(JSON.stringify({type:'status',message:state,connection:live.connectionStatus()}));
   socket.send(JSON.stringify({type:'providers',items:Object.keys(PROVIDERS)}));
   socket.on('message', raw=>{
     let request;
@@ -106,5 +111,5 @@ wss.on('connection', (socket, request)=>{
     else if (request.action === 'simulate') simulate(request.payload);
   });
 });
-server.listen(PORT,HOST,()=>updateStatus('PASSERELLE V0.3 • TIKFINITY / TIKTOOLS DISPONIBLES'));
+server.listen(PORT,HOST,()=>updateStatus('PASSERELLE V0.5 • TIKFINITY / TIKTOOLS DISPONIBLES'));
 process.on('SIGINT',()=>{live.stop(false);server.close();});

@@ -5,6 +5,7 @@ extends Node2D
 
 const Mission = preload("res://scripts/mission.gd")
 const Agents = preload("res://scripts/agents.gd")
+const SessionStore = preload("res://scripts/session_store.gd")
 const WIDTH := 720.0
 const HEIGHT := 1280.0
 const BRIDGE_LEFT := 188.0
@@ -57,11 +58,20 @@ var music: Node
 var live_auto_hide := false
 var saved_live_name := ""
 var hint_flash := 0.0
+var session_picker: OptionButton
+var pause_button: Button
+var restart_dialog: ConfirmationDialog
+var store_service := SessionStore.new()
+var persistence_enabled := true
+var save_clock := 0.0
+var save_status := ""
+var live_confirmed := false
 
 func _ready() -> void:
 	randomize()
 	state = Mission.new()
-	state.call("configure",true)
+	state.call("configure_session",true,true,7200.0)
+	persistence_enabled = DisplayServer.get_name() != "headless"
 	agents = Agents.new()
 	current_scenario = str(state.call("scenario_info").get("id"))
 	last_progress = float(state.get("progress"))
@@ -74,6 +84,7 @@ func _ready() -> void:
 	_setup_world_3d()
 	_load_preferences()
 	_open_socket()
+	get_tree().auto_accept_quit = false
 	set_process(true)
 	queue_redraw()
 
@@ -126,6 +137,10 @@ func _process(delta: float) -> void:
 			helicopter_active = false
 	_poll_socket(d)
 	state.call("tick",d)
+	save_clock += d
+	if save_clock >= 10.0:
+		save_clock = 0.0
+		_save_session()
 	agent_message_life = maxf(0.0,agent_message_life-d)
 	if agents != null:
 		var suggestion: String = agents.call("tick",d,state,game_mode=="LIVE")
@@ -201,15 +216,20 @@ func _poll_socket(d: float) -> void:
 			if game_mode == "LIVE" and not saved_live_name.is_empty():
 				if selected_provider == "tikfinity":
 					ws.send_text(JSON.stringify({"type":"control","action":"connect","username":saved_live_name,"provider":selected_provider}))
+					status_tiktok = "RECONNEXION AUTOMATIQUE : @" + saved_live_name
 				else:
 					status_tiktok = "TIKTOOLS : RENSEIGNER LA CLE API A NOUVEAU"
-				status_tiktok = "RECONNEXION AUTOMATIQUE : @" + saved_live_name
 		bridge_connected = true
 		reconnect = 4.0
-		while ws.get_available_packet_count() > 0:
+		var budget := 200
+		while ws.get_available_packet_count() > 0 and budget > 0:
 			_handle_packet(ws.get_packet().get_string_from_utf8())
+			budget -= 1
 	elif status == WebSocketPeer.STATE_CLOSED:
 		bridge_connected = false
+		live_confirmed = false
+		if game_mode == "LIVE":
+			state.call("set_pause","network",true)
 		connected_before = false
 		reconnect -= d
 		if reconnect <= 0.0:
@@ -222,6 +242,10 @@ func _handle_packet(raw: String) -> void:
 		return
 	if str(packet.get("type","")) == "status":
 		status_tiktok = str(packet.get("message","")).substr(0,90)
+		var connection = packet.get("connection",{})
+		live_confirmed = bool(connection.get("liveConfirmed",false)) if typeof(connection)==TYPE_DICTIONARY and connection.has("liveConfirmed") else status_tiktok.begins_with("TIKTOK LIVE CONNECTE")
+		if game_mode == "LIVE":
+			state.call("set_pause","network",not live_confirmed)
 		if game_mode == "LIVE" and status_tiktok.begins_with("TIKTOK LIVE CONNECTE") and not live_auto_hide:
 			admin_visible = false
 			live_auto_hide = true
@@ -238,6 +262,8 @@ func _handle_packet(raw: String) -> void:
 	var user := str(packet.get("user","Spectateur")).strip_edges().substr(0,24)
 	if user.is_empty():
 		return
+	live_confirmed = true
+	state.call("set_pause","network",false)
 	match str(packet.get("event","")):
 		"chat":
 			var message := str(packet.get("text",""))
@@ -257,21 +283,18 @@ func _handle_packet(raw: String) -> void:
 			pass
 
 func _switch_mode() -> void:
+	_save_session()
 	if game_mode == "DEMO":
 		game_mode = "LIVE"
-		if world_3d != null:
-			world_3d.call("set_live",true)
 		live_auto_hide = false
-		state.call("configure",false)
+		_reset_session(true)
 		agents.call("reset")
 		banner = "MODE LIVE : AUCUN JOUEUR FICTIF"
 		banner_life = 3.0
 	else:
 		game_mode = "DEMO"
-		if world_3d != null:
-			world_3d.call("set_live",false)
 		admin_visible = true
-		state.call("configure",true)
+		_reset_session(false)
 		agents.call("reset")
 		saved_live_name = ""
 		if ws.get_ready_state() == WebSocketPeer.STATE_OPEN:
@@ -280,6 +303,68 @@ func _switch_mode() -> void:
 		banner = "MODE DEMONSTRATION • SCENARIO AUTOMATIQUE"
 		banner_life = 3.0
 	_update_controls()
+
+func _session_path() -> String:
+	return "user://session_live.json" if game_mode == "LIVE" else "user://session_demo.json"
+
+func _reset_session(recover: bool) -> void:
+	var choice := session_picker.selected if session_picker != null else 2
+	state.call("configure_session",game_mode=="DEMO",choice>0,float(maxi(1,choice))*3600.0)
+	if recover and persistence_enabled and store_service.load_game(state,_session_path()):
+		if bool(state.get("demo_mode")) != (game_mode=="DEMO"):
+			state.call("configure_session",game_mode=="DEMO",choice>0,float(maxi(1,choice))*3600.0)
+		else:
+			var session: RefCounted = state.get("marathon")
+			session_picker.select(int(round(float(session.get("duration"))/3600.0)) if bool(session.get("enabled")) else 0)
+			save_status = "SESSION RESTAUREE" + (" (COPIE DE SECOURS)" if store_service.used_backup else "")
+	state.call("set_pause","network",game_mode=="LIVE" and not live_confirmed)
+	if world_3d != null:
+		world_3d.call("set_live",game_mode=="LIVE")
+	agents.call("reset")
+	fx.clear()
+	last_event = int(state.get("event_id"))
+	last_saved = int(state.get("saved"))
+	last_progress = float(state.get("progress"))
+	last_strength = float(state.get("strength"))
+	save_clock = 0.0
+
+func _save_session(force: bool = false) -> void:
+	if not persistence_enabled or (not force and str(state.get("status"))=="WAITING"):
+		return
+	if store_service.save_game(state,_session_path()):
+		save_status = "SAUVEGARDE OK"
+	else:
+		save_status = store_service.error_message.to_upper()
+
+func _resume_session() -> void:
+	if not persistence_enabled:
+		return
+	if store_service.load_game(state,_session_path()):
+		if bool(state.get("demo_mode")) != (game_mode=="DEMO"):
+			_reset_session(false)
+			return
+		state.call("set_pause","network",game_mode=="LIVE" and not live_confirmed)
+		world_3d.call("set_live",game_mode=="LIVE")
+		var session: RefCounted = state.get("marathon")
+		session_picker.select(int(round(float(session.get("duration"))/3600.0)) if bool(session.get("enabled")) else 0)
+		save_status = "SESSION RESTAUREE" + (" (SECOURS)" if store_service.used_backup else "")
+		fx.clear()
+		agents.call("reset")
+		last_event = int(state.get("event_id"))
+	else:
+		save_status = store_service.error_message.to_upper()
+	_update_controls()
+
+func _toggle_pause() -> void:
+	var reasons: Dictionary = state.get("pause_reasons")
+	state.call("set_pause","manual",not reasons.has("manual"))
+	_save_session()
+	_update_controls()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_CLOSE_REQUEST and state != null:
+		_save_session()
+		get_tree().quit()
 
 func _connect_tiktok() -> void:
 	var name := live_name.text.strip_edges().trim_prefix("@")
@@ -338,8 +423,8 @@ func _build_controls() -> void:
 	layer.add_child(canvas)
 	canvas.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var panel := PanelContainer.new()
-	panel.position = Vector2(14,1007)
-	panel.size = Vector2(692,260)
+	panel.position = Vector2(14,844)
+	panel.size = Vector2(692,420)
 	canvas.add_child(panel)
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color("#061628f4")
@@ -390,6 +475,37 @@ func _build_controls() -> void:
 		key_input.visible = index == 1
 	)
 	key_input.visible = false
+	var session_row := HBoxContainer.new()
+	session_row.add_theme_constant_override("separation",8)
+	stack.add_child(session_row)
+	session_picker = OptionButton.new()
+	for title in ["Classique","Marathon 1 h","Marathon 2 h","Marathon 3 h"]:
+		session_picker.add_item(title)
+	session_picker.select(2)
+	session_picker.custom_minimum_size = Vector2(210,44)
+	session_picker.add_theme_font_size_override("font_size",17)
+	session_row.add_child(session_picker)
+	restart_dialog = ConfirmationDialog.new()
+	restart_dialog.title = "Nouvelle session"
+	restart_dialog.dialog_text = "Recommencer avec le format choisi ?\nLa progression de cette session sera remplacee."
+	restart_dialog.ok_button_text = "Recommencer"
+	restart_dialog.cancel_button_text = "Conserver la session"
+	add_child(restart_dialog)
+	restart_dialog.confirmed.connect(func():
+		_reset_session(false)
+		_save_session(true)
+	)
+	_make_btn(session_row,"NOUVELLE SESSION",225,func(): restart_dialog.popup_centered(),Color("#3b557a"))
+	_make_btn(session_row,"REPRENDRE",210,_resume_session,Color("#287968"))
+	var save_row := HBoxContainer.new()
+	save_row.add_theme_constant_override("separation",8)
+	stack.add_child(save_row)
+	pause_button = _make_btn(save_row,"PAUSE",210,_toggle_pause,Color("#3c657b"))
+	_make_btn(save_row,"SAUVEGARDER",225,func(): _save_session(true),Color("#3c657b"))
+	_make_btn(save_row,"MASQUER • F10",210,func():
+		admin_visible = false
+		_update_controls()
+	,Color("#3c657b"))
 	status_label = Label.new()
 	status_label.text = "SIMULATION AUTONOME • CHANGE EN LIVE POUR RECEVOIR LES COMMENTAIRES"
 	status_label.add_theme_font_size_override("font_size",14)
@@ -413,6 +529,10 @@ func _update_controls() -> void:
 		status_label.text = "DEMO : LES ACTIONS SONT SIMULEES • AUCUN SPECTATEUR FICTIF"
 	else:
 		status_label.text = status_tiktok if bridge_connected else "CONNECTE LE LIVE AVEC TON PSEUDO TIKTOK"
+	if not save_status.is_empty():
+		status_label.text += "\n"+save_status
+	if pause_button != null:
+		pause_button.text = "CONTINUER" if state.get("pause_reasons").has("manual") else "PAUSE"
 	canvas.visible = admin_visible
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -734,7 +854,7 @@ func _draw_result() -> void:
 	for i in range(mini(3,order.size())):
 		leaders.append("@" + str(order[i]) + "  " + str(contributors[order[i]]))
 	_text("   •   ".join(leaders) if not leaders.is_empty() else "DEMONSTRATION",Vector2(70,685),17,Color("#fff1b5"),true,580)
-	_text("NOUVELLE MISSION DANS %d S" % int(ceil(float(state.get("result_seconds")))),Vector2(80,755),23,Color("#abf0e2"),true,560)
+	_text("SUITE DANS %d S" % int(ceil(float(state.get("result_seconds")))),Vector2(80,755),23,Color("#abf0e2"),true,560)
 
 func _star(center: Vector2, radius: float, color: Color) -> void:
 	var points: Array[Vector2] = []
@@ -959,6 +1079,13 @@ func _draw_hud_3d() -> void:
 		_draw_footer_3d()
 	if str(state.get("status")) == "RESULT":
 		_draw_result()
+	if str(state.get("status")) == "SESSION_COMPLETE":
+		_draw_session_result()
+	if bool(state.call("is_paused")):
+		_rect(40,347,640,83,Color("#0a1c31ef"))
+		_text("PARTIE EN PAUSE",Vector2(65,380),24,Color("#ffe2a2"))
+		var reason := "F10 : CONTINUER LA SESSION" if state.get("pause_reasons").has("manual") else "RECONNEXION TIKTOK • PROGRESSION CONSERVEE"
+		_text(reason,Vector2(65,409),16,Color("#cce7e9"))
 	if flash > 0.0:
 		_rect(0,222,720,820,Color(1.0,0.53,0.31,flash*0.12))
 
@@ -995,19 +1122,33 @@ func _draw_compact_header_3d() -> void:
 	var cycle := int((mission_number-1)/15)+1
 	_rect(14,10,692,130,Color("#071b29db"))
 	_rect(14,10,5,130,Color("#69cfaf"))
-	_text("MISSION %02d / 15   •   CYCLE %d" % [chapter,cycle],Vector2(29,38),16,Color("#aee9d8"))
-	_text(str(info.get("title","MISSION")).substr(0,38),Vector2(29,70),21,Color("#fff0ba"))
+	var session: RefCounted = state.get("marathon")
+	var session_label := "MISSION %02d/15 • CYCLE %d" % [chapter,cycle]
+	if bool(session.get("enabled")):
+		session_label = "M%02d • MARATHON %s / %s" % [chapter,_format_time(float(session.get("elapsed"))),_format_time(float(session.get("duration")))]
+	_text(session_label,Vector2(29,38),16,Color("#aee9d8"))
+	var support := str(state.get("status")) == "CHALLENGE"
+	var finished := str(state.get("status")) == "SESSION_COMPLETE"
+	var title := str(session.call("challenge_info").get("title","SOUTIEN")) if support else str(info.get("title","MISSION"))
+	_text("BILAN DE LA SESSION" if finished else title.substr(0,38),Vector2(29,70),21,Color("#fff0ba"))
 	var connected := game_mode == "LIVE" and status_tiktok.begins_with("TIKTOK LIVE CONNECTE")
 	var badge := "LIVE OK" if connected else ("HORS LIGNE" if game_mode == "LIVE" else "DEMO")
 	_rect(564,17,119,27,Color("#196e63") if connected else Color("#645748"))
 	_text(badge,Vector2(572,36),13,Color.WHITE,true,107)
 	var seconds := maxi(0,int(ceil(float(state.get("seconds")))))
-	_text("%02d:%02d" % [int(seconds/60),seconds%60],Vector2(566,91),25,Color("#ffd28e"))
-	_text(str(info.get("objective","")).substr(0,32) + " : %d/%d" % [int(state.get("saved")),int(state.get("target"))],
-		Vector2(29,97),16,Color("#e9e6d5"))
+	if support:
+		seconds = maxi(0,int(ceil(float(session.get("challenge_seconds")))))
+	_text("FIN" if finished else "%02d:%02d" % [int(seconds/60),seconds%60],Vector2(566,91),25,Color("#ffd28e"))
+	var objective := str(info.get("objective","")).substr(0,32) + " : %d/%d" % [int(state.get("saved")),int(state.get("target"))]
+	if support:
+		objective = "OBJECTIF COLLECTIF : %d/3 ETAPES" % int(session.get("challenge_stage"))
+	elif finished:
+		objective = "%d PERSONNES SAUVEES AU TOTAL" % int(session.get("total_saved"))
+	_text(objective,Vector2(29,97),16,Color("#e9e6d5"))
 	_rect(29,112,650,8,Color("#284750"))
-	_rect(29,112,650*clampf(float(state.get("progress"))/100.0,0.0,1.0),8,Color("#ecc17d"))
-	var special := str(info.get("special","!special"))
+	var fraction := float(session.call("challenge_fraction")) if support else clampf(float(state.get("progress"))/100.0,0.0,1.0)
+	_rect(29,112,650*(1.0 if finished else fraction),8,Color("#ecc17d"))
+	var special := "!special" if support else str(info.get("special","!special"))
 	_rect(15,145,690,29,Color("#092c36d6"))
 	_text("!join   !build   !repair   !rescue   " + special + "   !regles",
 		Vector2(30,165),17,Color("#e5f7ec"))
@@ -1019,12 +1160,21 @@ func _draw_footer_3d() -> void:
 	var seconds := int(ceil(float(state.get("seconds"))))
 	var urgent := seconds <= 35 and str(state.get("status"))=="RUNNING"
 	var message := "DERNIERE MINUTE : SAUVEZ-LES !" if urgent else "CHAQUE COMMENTAIRE FAIT BOUGER UN OUVRIER !"
+	if str(state.get("status")) == "CHALLENGE":
+		message = "PREPAREZ ENSEMBLE LE PROCHAIN SAUVETAGE !"
+	elif str(state.get("status")) == "SESSION_COMPLETE":
+		message = "MERCI A TOUS LES PARTICIPANTS !"
 	_text(message,Vector2(25,1220),23,Color("#ffb995") if urgent else Color("#fff0bd"))
 	_text(str(state.call("scenario_info").get("material")) + " : %d" % int(state.get("wood")),
 		Vector2(28,1258),17,Color("#b3eadc"))
 	_text("F7 CAMERA 360  •  F10 MASQUER LES COMMANDES",Vector2(240,1258),14,Color("#c9e3e5"))
 
 func _draw_mission_challenge_3d() -> void:
+	if str(state.get("status"))=="SESSION_COMPLETE":
+		return
+	if str(state.get("status"))=="CHALLENGE":
+		_draw_support_challenge()
+		return
 	var side_name := str(state.get("secondary_label"))
 	var achieved := float(state.get("secondary_progress"))
 	var goal := maxf(1.0,float(state.get("secondary_goal")))
@@ -1044,3 +1194,33 @@ func _draw_mission_challenge_3d() -> void:
 	_rect(360,270,220*clampf(achieved/goal,0,1),7,
 		Color("#7cdab3") if complete else Color("#eabe77"))
 	_text("%d%%" % int(100.0*achieved/goal),Vector2(593,282),15,Color("#e3f4ea"))
+
+func _format_time(value: float) -> String:
+	var seconds := maxi(0,int(value))
+	return "%02d:%02d:%02d" % [int(seconds/3600),int(seconds/60)%60,seconds%60]
+
+func _draw_support_challenge() -> void:
+	var session: RefCounted = state.get("marathon")
+	var info: Dictionary = session.call("challenge_info")
+	if info.is_empty():
+		return
+	var stage := mini(2,int(session.get("challenge_stage")))
+	var command := "!"+str(session.call("focus_action"))
+	_rect(18,231,684,99,Color("#09232bee"))
+	_text("SOUTIEN • "+str(info["title"]),Vector2(32,255),19,Color("#f6d99c"))
+	_text("%d/3  %s" % [stage+1,str(info["stages"][stage])],Vector2(32,280),16,Color("#e4f3ec"))
+	_text(command+"  •  GRATUIT",Vector2(32,308),17,Color("#9eeac8"))
+	_text("%ds" % int(ceil(float(session.get("challenge_seconds")))),Vector2(630,255),17,Color("#f6d99c"))
+	_rect(320,300,350,8,Color("#213c46"))
+	_rect(320,300,350*float(session.call("challenge_fraction")),8,Color("#70d9ad"))
+
+func _draw_session_result() -> void:
+	var session: RefCounted = state.get("marathon")
+	_rect(45,370,630,385,Color("#09232bf2"))
+	_text("MARATHON TERMINE",Vector2(75,420),32,Color("#ffe3a3"))
+	_text(_format_time(float(session.get("elapsed")))+" DE JEU",Vector2(75,463),23,Color("#e2f3e8"))
+	_text("%d MISSIONS • %d REUSSITES" % [int(session.get("rounds")),int(session.get("wins"))],Vector2(75,508),22,Color("#e2f3e8"))
+	_text("%d PERSONNES SAUVEES" % int(session.get("total_saved")),Vector2(75,550),24,Color("#a4e9c9"))
+	_text("%d OPERATIONS DE SOUTIEN REUSSIES" % int(session.get("challenges_won")),Vector2(75,590),19,Color("#e2f3e8"))
+	_text("MERCI A TOUS LES PARTICIPANTS !",Vector2(75,643),22,Color("#ffe3a3"))
+	_text("F10 : NOUVELLE SESSION OU SAUVEGARDE",Vector2(75,710),17,Color("#e2f3e8"))

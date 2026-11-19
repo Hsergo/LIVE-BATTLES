@@ -1,5 +1,7 @@
 # LIVE RESCUE — PLAN DIRECTEUR ET CRITERES DU JEU COMPLET
 
+**Mise à jour V0.5 (19 novembre 2026) :** le marathon, les trois soutiens, la sauvegarde et la reprise sont intégrés. Voir [la recette actuelle](RECETTE_V05.md) et [le guide utilisateur](GUIDE_DEMARRAGE.md). La grille ci-dessous conserve les objectifs de la version 1.0 ; les preuves de recette de la V0.5 remplacent ses anciens états techniques.
+
 **Statut de référence :** dossier maître du projet, et non une nouvelle démonstration. Une version Windows ne sera qualifiée de **1.0 complète** qu'après validation de l'intégralité des jalons et une séance TikTok LIVE réelle.
 
 **Public :** TikTok LIVE francophone ; créateur non développeur sur Windows ; 9:16 ; spectacle de construction et de sauvetage 3D coopératif. Les spectateurs jouent dans les commentaires et voient leur propre personnage intervenir. Les cadeaux restent facultatifs pour la réussite, sans jeu d'argent, tirage au sort payant ou promesse de contrepartie monétaire.
@@ -8,7 +10,7 @@
 
 - **15 vraies missions, 5 familles de terrains 3D** : pont, digue, phare, barrage, héliport.
 - Chaque mission possède son identifiant, son objectif, son niveau de risque, un événement catastrophique et une commande spéciale gratuite. Les variantes graphiques, scripts événementiels et difficultés seront affinés avant la 1.0.
-- **Campagne longue :** total de 125 min 50 s de temps maximal affiché sur 15 niveaux. Si les équipes réussissent rapidement, les manches peuvent être beaucoup plus courtes : cela ne garantit donc pas 2 h de jeu. La version finale proposera des actes intermédiaires, des objectifs bonus et un mode marathon.
+- **Campagne longue :** total de 125 min 50 s de temps maximal affiché sur 15 niveaux. Si les équipes réussissent rapidement, les manches peuvent être beaucoup plus courtes : cela ne garantit donc pas 2 h de jeu. La V0.5 apporte les actes, les objectifs bonus et un marathon de 1, 2 ou 3 heures avec opérations intermédiaires.
 - **Participation massivement multijoueur :** jusqu'à 500 pseudos comptés dans le modèle, 48 ouvriers 3D rendus simultanément pour ne pas saturer les GPU d'entrée de gamme ; les places visibles tournent en faveur des auteurs d'actions récentes. Les limites devront être validées en test de charge réel.
 - **Démonstration honnête :** un mode DEMO clairement identifié, sans identité ou cadeau fictivement présenté comme réel. Le mode LIVE n'accepte pas les événements du simulateur.
 - **Un seul installateur Windows**, lancement automatique du pont local, sans installation de Godot, Node ou Blender.
@@ -106,7 +108,7 @@ Godot 4.7.2 stable est disponible depuis le 18 août 2026. Les mises à niveau d
 | J4 | Système de personnages pour 50+ spectateurs | 🟡 Comptage et rendu basiques ; stress test réel manquant | 50/100/500 participants simulés, aucun événement perdu |
 | J5 | Cadeaux spectaculaires, classement et équité | 🟡 Matériaux et classements existants, équilibrage manquant | Test dons réels, déduplication, aucun blocage payant |
 | J6 | Agents IA, accueil et chatbot TikFinity | 🟡 Agents d'affichage existants, chat TikTok non connecté en écriture | Test de `!regles` et de la fonction chatbot depuis un vrai LIVE |
-| J7 | Mode marathon, sauvegarde, crash recovery, anti-spam | ⬜ À développer | 2 à 3 h sans crash, reconnexion et reprise de partie |
+| J7 | Mode marathon, sauvegarde, reprise, anti-spam | 🟡 Intégrés en V0.5 ; simulations accélérées et reprise testées | Endurance réelle de 2 à 3 h avec OBS et TikTok à confirmer |
 | J8 | Optimisation 3D et intégration Godot 4.7.2 | ⬜ À tester sur branche séparée | Objectif 30 FPS mini sur PC cible ; 60 FPS souhaités |
 | J9 | Validation qualité et conformité TikTok LIVE | ⬜ Nécessite vrai LIVE avec créateur | Commentaire, cadeau, OBS, chat et UX confirmés |
 | J10 | **Build Windows LIVE RESCUE 1.0** | ⬜ Non livrée | Tous les jalons signés et installateur validé |

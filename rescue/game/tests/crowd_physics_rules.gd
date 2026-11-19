@@ -40,7 +40,8 @@ func _run() -> void:
 	motor.queue_free()
 	barrier.queue_free()
 	var world_model: RefCounted = load("res://scripts/mission.gd").new()
-	world_model.call("configure",true)
+	world_model.call("configure",false)
+	world_model.call("join","qa_builder")
 	var villagers := load("res://scripts/villagers_3d.gd").new() as Node3D
 	root.add_child(villagers)
 	villagers.call("setup",world_model,"bridge")
@@ -51,7 +52,7 @@ func _run() -> void:
 	check(world_model.get("crossings").is_empty(),"Aucune evacuation fictive avant commande")
 	world_model.set("progress",100.0)
 	world_model.set("strength",94.0)
-	world_model.call("rescue","DEMO")
+	world_model.call("rescue","qa_builder")
 	for frame in range(800):
 		await physics_frame
 		world_model.call("tick",1.0/60.0)

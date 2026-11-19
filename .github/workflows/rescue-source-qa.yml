@@ -1,51 +1,35 @@
-name: LIVE RESCUE - Source QA Godot (no Windows export)
+name: LIVE RESCUE - Source QA Godot
 on:
   push:
     branches:
       - production/characters-and-rescue-3d
   workflow_dispatch:
+permissions:
+  contents: read
 jobs:
-  headless-source-tests:
+  source-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
-      - name: Fetch Godot 4.5.2 headless-capable editor
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test bridge
+        working-directory: rescue/bridge
+        run: npm ci --no-audit --no-fund && npm test
+      - name: Fetch pinned Godot editor
         run: |
           set -euo pipefail
-          curl -fL --retry 3 --connect-timeout 20 \
-            https://github.com/godotengine/godot/releases/download/4.5.2-stable/Godot_v4.5.2-stable_linux.x86_64.zip \
-            -o godot-source-qa.zip
-          unzip -q godot-source-qa.zip
+          curl -fL --retry 3 --connect-timeout 20 https://github.com/godotengine/godot/releases/download/4.5.2-stable/Godot_v4.5.2-stable_linux.x86_64.zip -o godot.zip
+          unzip -q godot.zip
           chmod +x Godot_v4.5.2-stable_linux.x86_64
-          ./Godot_v4.5.2-stable_linux.x86_64 --version
-      - name: Import glTF resources, no export templates
-        run: |
-          set -euo pipefail
-          ./Godot_v4.5.2-stable_linux.x86_64 --headless --path rescue/game --editor --quit
-      - name: Verify authored 15 missions and gameplay
-        run: |
-          set -euo pipefail
-          for script in \
-            res://tests/catalog_rules.gd \
-            res://tests/mission_dynamics_qa.gd \
-            res://tests/mission_pacing_qa.gd \
-            res://tests/mission_rules.gd \
-            res://tests/campaign_playtest.gd; do
-            echo "SOURCE QA: $script"
-            timeout 75s ./Godot_v4.5.2-stable_linux.x86_64 --headless --path rescue/game --script "$script"
-          done
-      - name: Verify 3D civilians, scene, physical arrival and crew
-        run: |
-          set -euo pipefail
-          for script in \
-            res://tests/rescue_routes_qa.gd \
-            res://tests/physical_arrival_qa.gd \
-            res://tests/character_stage_qa.gd \
-            res://tests/art_production_qa.gd \
-            res://tests/crew_lod_qa.gd \
-            res://tests/rescue_choreography_qa.gd \
-            res://tests/view_smoke.gd; do
-            echo "SOURCE QA: $script"
-            timeout 75s ./Godot_v4.5.2-stable_linux.x86_64 --headless --path rescue/game --script "$script"
-          done
+      - name: Import and run every Godot suite
+        run: python3 rescue/tools/run-godot-qa.py --godot ./Godot_v4.5.2-stable_linux.x86_64 --output qa-logs
+      - name: Verify integration contracts
+        run: node rescue/tools/production-preflight.js
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: RESCUE-SOURCE-QA
+          path: qa-logs/

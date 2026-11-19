@@ -2,6 +2,7 @@ config_version=5
 
 [application]
 config/name="MISSION SAUVETAGE LIVE"
+config/version="0.5.0"
 run/main_scene="res://main.tscn"
 config/features=PackedStringArray("4.0", "GL Compatibility")
 boot_splash/show_image=false
@@ -9,8 +10,8 @@ boot_splash/show_image=false
 [display]
 window/size/viewport_width=720
 window/size/viewport_height=1280
-window/size/window/width_override=540
-window/size/window/height_override=960
+window/size/window_width_override=540
+window/size/window_height_override=960
 window/stretch/mode="canvas_items"
 window/handheld/orientation=1
 

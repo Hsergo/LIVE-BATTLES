@@ -4,7 +4,7 @@ const assert=require('node:assert/strict');
 const {WebSocketServer}=require('ws');
 const {LiveProvider}=require('../providers');
 
-test('TikFinity Desktop : vrai protocole WebSocket local reproduit sans TikTok', {timeout: 7500}, async ()=>{
+test('TikFinity Desktop : reception, coupure et reconnexion sans TikTok', {timeout: 12000}, async ()=>{
   const packets=[], statuses=[];
   const server=new WebSocketServer({host:'127.0.0.1',port:21213});
   await new Promise((resolve,reject)=>{
@@ -34,6 +34,21 @@ test('TikFinity Desktop : vrai protocole WebSocket local reproduit sans TikTok',
     assert.equal(packets[1].count,3,'One final gift streak only');
     assert.equal(provider.connectionStatus().liveConfirmed,true);
     assert.ok(statuses.some(s=>s.includes('TIKTOK LIVE CONNECTE')));
+    const reconnected=new Promise((resolve,reject)=>{
+      const timeout=setTimeout(()=>reject(new Error('Reconnect timeout')),6000);
+      server.once('connection',socket=>{
+        socket.send(JSON.stringify({event:'chat',data:{user:{uniqueId:'bob'},comment:'!repair',msgId:'after-reconnect'}}));
+        clearTimeout(timeout);
+        resolve();
+      });
+    });
+    for(const socket of server.clients)socket.close();
+    await new Promise(resolve=>setTimeout(resolve,60));
+    assert.equal(provider.connectionStatus().liveConfirmed,false,'Disconnect revokes live confirmation');
+    await reconnected;
+    await new Promise(resolve=>setTimeout(resolve,60));
+    assert.equal(packets.at(-1).user,'bob');
+    assert.equal(provider.connectionStatus().liveConfirmed,true,'Fresh event restores live confirmation');
   } finally {
     provider.stop(false);
     await new Promise(resolve=>server.close(resolve));

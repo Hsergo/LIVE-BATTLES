@@ -16,8 +16,13 @@ const DISASTER_STAGES := [0.35, 0.68, 0.88]
 const Catalog = preload("res://scripts/mission_catalog.gd")
 const Dynamics = preload("res://scripts/mission_dynamics.gd")
 const Pacing = preload("res://scripts/mission_pacing.gd")
+const Marathon = preload("res://scripts/marathon_session.gd")
 const SCENARIOS = Catalog.LEVELS
 var pacing := Pacing.new()
+var marathon := Marathon.new()
+var pause_reasons: Dictionary = {}
+var revision := 0
+var saved_person_indices: Array[int] = []
 var demo_mode := true
 var hazard_pressure := 0.0
 var last_special := ""
@@ -79,6 +84,8 @@ var reward_names := ["HELICOPTERE", "GRUE DE CHANTIER", "DIGUE D'URGENCE"]
 
 func configure(is_demo: bool) -> void:
 	demo_mode = is_demo
+	marathon.configure(false)
+	pause_reasons.clear()
 	mission_index = 1
 	missions_cleared = 0
 	participants.clear()
@@ -86,7 +93,21 @@ func configure(is_demo: bool) -> void:
 	cooldowns.clear()
 	_start_mission(true)
 
+func configure_session(is_demo: bool, marathon_mode: bool, duration: float = 7200.0) -> void:
+	configure(is_demo)
+	marathon.configure(marathon_mode,duration)
+
+func set_pause(reason: String, on: bool) -> void:
+	if on:
+		pause_reasons[reason] = true
+	else:
+		pause_reasons.erase(reason)
+
+func is_paused() -> bool:
+	return not pause_reasons.is_empty()
+
 func _start_mission(reset_people: bool) -> void:
+	revision += 1
 	if reset_people:
 		pacing.reset(demo_mode)
 		participants.clear()
@@ -118,6 +139,7 @@ func _start_mission(reset_people: bool) -> void:
 	strength = 86.0
 	wood = 34.0
 	saved = 0
+	saved_person_indices.clear()
 	target = int(SCENARIOS[scenario_index]["target"])
 	rescue_queue = 0
 	rescue_owners.clear()
@@ -172,7 +194,7 @@ func join(user: String) -> bool:
 	return true
 
 func _eligible(user: String, command: String, cool: float) -> bool:
-	if status != "RUNNING":
+	if status not in ["RUNNING","CHALLENGE"] or is_paused():
 		return false
 	if not demo_mode and not participants.has(user):
 		_note("@" + user.substr(0,16) + " : ECRIS !join D'ABORD", "hint", user)
@@ -195,6 +217,10 @@ func _credit(user: String, amount: int) -> void:
 
 func receive(user: String, command: String) -> bool:
 	var cmd := command.strip_edges().to_lower()
+	if cmd == str(SCENARIOS[scenario_index]["special"]):
+		cmd = "!special"
+	if cmd in ["!regles","!aide"]:
+		cmd = "!rules"
 	if cmd == "!join" or cmd == "!play":
 		return join(user)
 	if cmd == "!build":
@@ -326,6 +352,8 @@ func _tick_mission_director(delta: float) -> void:
 		crisis_cooldown = 28.0
 
 func build(user: String) -> bool:
+	if status == "CHALLENGE":
+		return _challenge_action(user,"build")
 	if progress >= 99.9:
 		_note("CHANTIER TERMINE • UTILISE !rescue", "hint", user)
 		return false
@@ -345,6 +373,8 @@ func build(user: String) -> bool:
 	return true
 
 func repair(user: String) -> bool:
+	if status == "CHALLENGE":
+		return _challenge_action(user,"repair")
 	if strength >= 99.99:
 		_note("STRUCTURE DEJA REPAREE • !rescue", "hint", user)
 		return false
@@ -363,6 +393,8 @@ func repair(user: String) -> bool:
 	return true
 
 func rescue(user: String) -> bool:
+	if status == "CHALLENGE":
+		return _challenge_action(user,"rescue")
 	if progress < 99.9:
 		_note(str(SCENARIOS[scenario_index]["site"]) + " INACHEVE • !build", "warning")
 		return false
@@ -389,6 +421,8 @@ func _enqueue_rescue(user: String, count: int) -> void:
 	rescue_queue += accepted
 
 func special(user: String) -> bool:
+	if status == "CHALLENGE":
+		return _challenge_action(user,"special")
 	# Each type has its own free cooperative emergency action; gifts provide
 	# optional spectacular reinforcements but are not needed for completion.
 	if not _eligible(user,"special",7.0):
@@ -433,6 +467,8 @@ func special(user: String) -> bool:
 func vote(user: String, option: String) -> bool:
 	if not votes.has(option):
 		return false
+	if status == "CHALLENGE":
+		return _challenge_action(user,"vote")
 	if not _eligible(user,"vote",3.0):
 		return false
 	votes[option] += 1
@@ -459,8 +495,10 @@ func gift(user: String, gift_name: String, count: int = 1) -> bool:
 		return false
 	if status == "WAITING" and not demo_mode:
 		join(user)
-	if status != "RUNNING":
+	if status not in ["RUNNING","CHALLENGE"] or is_paused():
 		return false
+	if not participants.has(user):
+		join(user)
 	var quantity := clampi(count,1,1000)
 	var amount := mini(1500,quantity * int(GIFT_RESOURCES[key]))
 	wood = minf(350.0,wood+float(amount))
@@ -470,6 +508,9 @@ func gift(user: String, gift_name: String, count: int = 1) -> bool:
 	if participants.has(user):
 		donor_points[user] = int(donor_points.get(user,0)) + amount
 	_note("CADEAU @" + user.substr(0,16) + " • +" + str(amount) + " MATERIAUX", "gift", user)
+	if status == "CHALLENGE":
+		marathon.pending_materials = minf(150.0,marathon.pending_materials+float(amount))
+		return true
 	while supply_level >= POWER_COSTS[2]:
 		supply_level -= POWER_COSTS[2]
 		protection_seconds = maxf(protection_seconds,16.0)
@@ -488,14 +529,38 @@ func gift(user: String, gift_name: String, count: int = 1) -> bool:
 
 func tick(delta: float) -> void:
 	var d := clampf(delta,0.0,0.1)
+	if is_paused():
+		return
 	pacing.tick(d)
 	for item in events:
 		item["life"] = maxf(0,float(item["life"])-d)
+	if status in ["RUNNING","RESULT","CHALLENGE"]:
+		marathon.tick(d)
+	if status == "CHALLENGE":
+		elapsed += d
+		marathon.challenge_seconds = maxf(0.0,marathon.challenge_seconds-d)
+		if demo_mode:
+			demo_clock += d
+			if demo_clock >= 2.6:
+				demo_clock = 0.0
+				_challenge_action("DEMO",marathon.focus_action())
+		if marathon.challenge_stage >= 3 or marathon.challenge_seconds <= 0.0:
+			_complete_challenge()
+		return
 	if status == "RESULT":
-		result_seconds -= d
+		result_seconds = maxf(0.0,result_seconds-d)
 		if result_seconds <= 0.0:
-			mission_index += 1
-			_start_mission(false)
+			if marathon.reached_duration():
+				_complete_session()
+			elif marathon.enabled:
+				marathon.begin_challenge()
+				status = "CHALLENGE"
+				cooldowns.clear()
+				demo_clock = 0.0
+				_note(str(marathon.challenge_info()["title"])+" • BONUS GRATUIT", "info")
+			else:
+				mission_index += 1
+				_start_mission(false)
 		return
 	if status != "RUNNING":
 		return
@@ -560,6 +625,7 @@ func tick(delta: float) -> void:
 		if float(crossing["p"]) >= 1.0 and (arrival_gate.is_null() or bool(arrival_gate.call(int(crossing.get("person_index",-1))))):
 			crossings.erase(crossing)
 			saved += 1
+			saved_person_indices.append(int(crossing.get("person_index",-1)))
 			last_rescued_person_index = int(crossing.get("person_index",-1))
 			strength = maxf(0.0,strength-0.6)
 			var rescuer := str(crossing.get("rescuer",""))
@@ -597,6 +663,7 @@ func _finish(success: bool) -> void:
 	if status == "RESULT":
 		return
 	status = "RESULT"
+	marathon.record_result(success,saved)
 	result_seconds = 12.0
 	star_rating = 3 if saved >= target else (2 if saved >= int(ceil(target*0.75)) else (1 if saved > 0 else 0))
 	if success:
@@ -604,6 +671,44 @@ func _finish(success: bool) -> void:
 		_note("MISSION ACCOMPLIE • " + str(saved) + " HABITANTS SAUVES !", "success")
 	else:
 		_note("MISSION TERMINEE • " + str(saved) + "/" + str(target) + " SAUVES", "danger")
+
+func _challenge_action(user: String, action: String) -> bool:
+	if marathon.challenge_stage>=3 or marathon.challenge_seconds<=0.0:
+		return false
+	if not _eligible(user,"support_"+action,2.0):
+		return false
+	var before := marathon.challenge_stage
+	if not marathon.contribute(action,pacing.work_gain(7.0)):
+		return false
+	_credit(user,5)
+	if participants.has(user):
+		builder_points[user] = int(builder_points.get(user,0))+5
+	_note("@"+user+" • OPERATION DE SOUTIEN", "power" if action == "special" else action,user)
+	if before != marathon.challenge_stage:
+		_note("ETAPE %d/3 TERMINEE" % marathon.challenge_stage,"success")
+	return true
+
+func _complete_challenge() -> void:
+	if marathon.reached_duration():
+		_complete_session()
+		return
+	var reward := marathon.pending_reward
+	var materials := marathon.pending_materials
+	mission_index += 1
+	_start_mission(false)
+	wood = minf(350.0,wood+materials)
+	match reward:
+		"supplies": wood += 30.0
+		"protection": protection_seconds = 25.0
+		"strength": strength = 100.0
+	marathon.pending_reward = ""
+	marathon.pending_materials = 0.0
+	if not reward.is_empty():
+		_note("OPERATION REUSSIE • RENFORT GRATUIT POUR CETTE MISSION","success")
+
+func _complete_session() -> void:
+	status = "SESSION_COMPLETE"
+	_note("MARATHON TERMINE • %d SAUVES • %d MISSIONS" % [marathon.total_saved,marathon.rounds],"success")
 
 func ranking(limit: int = 3) -> Array[String]:
 	var list: Array[String] = []
@@ -618,6 +723,139 @@ func scenario_info() -> Dictionary:
 
 func active_players() -> int:
 	return pacing.active_count
+
+const SAVE_NUMBERS := {
+	"seconds":[0,600],"elapsed":[0,1000],"progress":[0,100],"strength":[0,100],"wood":[0,350],
+	"saved":[0,24],"rescue_queue":[0,24],"next_villager_index":[0,24],"weather_stage":[0,3],
+	"flood_level":[0,1],"hazard_pressure":[0,1],"protection_seconds":[0,60],"supply_level":[0,1500],
+	"gifted_resources":[0,1000000000],"star_rating":[0,3],"missions_cleared":[0,10000],
+	"result_seconds":[0,12],"event_id":[0,1000000000],"action_sequence":[0,1000000000],
+	"secondary_progress":[0,100],"secondary_milestone":[0,1],"mission_phase":[0,2],
+	"crisis_level":[0,100],"crisis_cooldown":[0,28],"crisis_trigger_count":[0,10000],
+	"next_disaster":[0,3],"bridge_gates":[0,1000000000],"demo_clock":[0,500],
+	"last_rescued_person_index":[-1,23]
+}
+const SAVE_SCORES := ["contribution","builder_points","donor_points","rescuer_points","lifetime_contribution"]
+
+func snapshot() -> Dictionary:
+	var numbers := {}
+	for key in SAVE_NUMBERS:
+		numbers[key] = get(key)
+	var scores := {}
+	for key in SAVE_SCORES:
+		scores[key] = (get(key) as Dictionary).duplicate()
+	return {"version":1,"demo_mode":demo_mode,"mission_index":mission_index,"status":status,
+		"numbers":numbers,"scores":scores,"participants":participants.keys(),
+		"crossings":crossings.duplicate(true),"rescue_owners":rescue_owners.duplicate(),
+		"saved_ids":saved_person_indices.duplicate(),"secondary_complete":secondary_complete,
+		"votes":votes.duplicate(),"marathon":marathon.snapshot(),
+		"manual_pause":pause_reasons.has("manual")}
+
+func restore(data: Dictionary) -> bool:
+	# Validate the complete snapshot before mutating the running game.
+	if int(data.get("version",0)) != 1 or typeof(data.get("demo_mode")) != TYPE_BOOL:
+		return false
+	if not _bounded_number(data.get("mission_index"),1,10000,true):
+		return false
+	if str(data.get("status","")) not in ["WAITING","RUNNING","RESULT","CHALLENGE","SESSION_COMPLETE"]:
+		return false
+	if typeof(data.get("numbers")) != TYPE_DICTIONARY or typeof(data.get("scores")) != TYPE_DICTIONARY:
+		return false
+	var numbers: Dictionary = data["numbers"]
+	for key in SAVE_NUMBERS:
+		if not _bounded_number(numbers.get(key),float(SAVE_NUMBERS[key][0]),float(SAVE_NUMBERS[key][1]),typeof(get(key))==TYPE_INT):
+			return false
+	if typeof(data.get("participants")) != TYPE_ARRAY or data["participants"].size() > MAX_MEMBERS:
+		return false
+	var people := {}
+	for person in data["participants"]:
+		if typeof(person) != TYPE_STRING or str(person).is_empty() or str(person).length()>24 or people.has(person):
+			return false
+		people[person] = true
+	for key in SAVE_SCORES:
+		var scores = data["scores"].get(key)
+		if typeof(scores) != TYPE_DICTIONARY or scores.size() > MAX_MEMBERS:
+			return false
+		for person in scores:
+			if not people.has(person) or not _bounded_number(scores[person],0,2000000000,true):
+				return false
+	if typeof(data.get("crossings")) != TYPE_ARRAY or typeof(data.get("saved_ids")) != TYPE_ARRAY or typeof(data.get("rescue_owners")) != TYPE_ARRAY:
+		return false
+	var info: Dictionary = SCENARIOS[(int(data["mission_index"])-1)%SCENARIOS.size()]
+	var limit := int(info["target"])
+	var moving: Array = data["crossings"]
+	var ids := {}
+	if moving.size() > (1 if str(info["site_type"])=="helipad" else 3):
+		return false
+	if data["saved_ids"].size() != int(numbers["saved"]) or data["rescue_owners"].size() != int(numbers["rescue_queue"]):
+		return false
+	for person in data["saved_ids"]:
+		if not _bounded_number(person,0,limit-1,true) or ids.has(int(person)):
+			return false
+		ids[int(person)] = true
+	var lanes := {}
+	for entry in moving:
+		if typeof(entry) != TYPE_DICTIONARY:
+			return false
+		if not _bounded_number(entry.get("person_index"),0,limit-1,true) or ids.has(int(entry["person_index"])):
+			return false
+		if not _bounded_number(entry.get("p"),0,1) or not _bounded_number(entry.get("speed"),0.05,1):
+			return false
+		if not _bounded_number(entry.get("lane"),0,2,true) or lanes.has(int(entry["lane"])):
+			return false
+		if not _saved_owner_valid(entry.get("rescuer"),people,bool(data["demo_mode"])):
+			return false
+		ids[int(entry["person_index"])] = true
+		lanes[int(entry["lane"])] = true
+	for owner in data["rescue_owners"]:
+		if not _saved_owner_valid(owner,people,bool(data["demo_mode"])):
+			return false
+	if ids.size() != int(numbers["next_villager_index"]) or ids.size()+int(numbers["rescue_queue"])>limit:
+		return false
+	for person in ids:
+		if int(person)>=int(numbers["next_villager_index"]):
+			return false
+	if typeof(data.get("votes")) != TYPE_DICTIONARY or data["votes"].size()!=3:
+		return false
+	for key in ["1","2","3"]:
+		if not _bounded_number(data["votes"].get(key),0,2,true):
+			return false
+	if typeof(data.get("secondary_complete"))!=TYPE_BOOL or typeof(data.get("manual_pause"))!=TYPE_BOOL or typeof(data.get("marathon"))!=TYPE_DICTIONARY:
+		return false
+	var restored_session := Marathon.new()
+	if not restored_session.restore(data["marathon"]):
+		return false
+	if str(data["status"])=="CHALLENGE" and (not restored_session.enabled or restored_session.challenge_index<0):
+		return false
+	configure(bool(data["demo_mode"]))
+	mission_index = int(data["mission_index"])
+	_start_mission(true)
+	marathon = restored_session
+	status = str(data["status"])
+	participants = people
+	for key in SAVE_NUMBERS:
+		set(key,numbers[key])
+	for key in SAVE_SCORES:
+		set(key,data["scores"][key].duplicate())
+	crossings.assign(moving)
+	rescue_owners.assign(data["rescue_owners"])
+	saved_person_indices.assign(data["saved_ids"])
+	votes = data["votes"].duplicate()
+	secondary_complete = bool(data["secondary_complete"])
+	mission_phase_label = str((mission_profile["phases"] as Array)[mission_phase])
+	set_pause("manual",bool(data["manual_pause"]))
+	events.clear()
+	visual_events.clear()
+	_note("SESSION RESTAUREE • PROGRESSION CONSERVEE","info")
+	return true
+
+func _saved_owner_valid(value, people: Dictionary, is_demo: bool) -> bool:
+	return typeof(value)==TYPE_STRING and (people.has(value) or str(value).is_empty() or (is_demo and value=="DEMO"))
+
+func _bounded_number(value, low: float, high: float, whole: bool = false) -> bool:
+	if typeof(value) not in [TYPE_INT,TYPE_FLOAT] or not is_finite(float(value)):
+		return false
+	return float(value)>=low and float(value)<=high and (not whole or float(value)==floor(float(value)))
 
 func top_builders(limit: int = 3) -> Array[String]:
 	return _leaders(builder_points,limit)

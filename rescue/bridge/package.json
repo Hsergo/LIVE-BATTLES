@@ -1,6 +1,6 @@
 {
   "name": "mission-sauvetage-live-bridge",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "private": true,
   "description": "Passerelle multi-connecteurs TikFinity/TikTools",
   "main": "index.js",

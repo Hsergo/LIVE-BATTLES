@@ -41,6 +41,18 @@ func setup(game: RefCounted, scene_type: String) -> void:
 	var amount := mini(int(game.get("target")),MAX_CIVILIANS)
 	for idx in range(amount):
 		crowd.append(_create_civilian(idx))
+	# A restored crossing resumes at its recorded route position, not on the bank.
+	var restored_crossings := {}
+	for entry in game.get("crossings"):
+		restored_crossings[int(entry["person_index"])] = entry
+	for actor in crowd:
+		var idx := int(actor["id"])
+		var rig: Node3D = actor["node"]
+		if restored_crossings.has(idx):
+			var entry: Dictionary = restored_crossings[idx]
+			rig.position = _route(float(entry["p"]),idx,int(entry["lane"]))
+		elif idx < int(game.get("next_villager_index")):
+			rig.position = _safe_position(idx)
 	var waiting_title := "EQUIPAGES EN ATTENTE" if scene_type == "lighthouse" else ("PERSONNES A EVACUER" if scene_type == "helipad" else "VILLAGEOIS EN ATTENTE")
 	waiting_sign = _sign(waiting_title,Vector3(-13.3,4.5,-1.9),Color("#ffecd0"))
 	var shelter_pos := Vector3(12.8,3.8,11.2) if scene_type in ["dike","dam"] else Vector3(12.8,3.8,-4.6)

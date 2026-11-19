@@ -39,6 +39,8 @@ var shaders: Dictionary = {}
 var recent_actions: Array[Dictionary] = []
 var last_status := ""
 var last_saved := 0
+var source_revision := -1
+var support_setpiece: Node3D
 var last_event := 0
 var total_spawned := 0
 var water_foam: Array[MeshInstance3D] = []
@@ -164,6 +166,7 @@ func _rebuild_world() -> void:
 	var name: String = str(info.get("id","bridge"))
 	var site_type: String = str(info.get("site_type","bridge"))
 	source_mission = name
+	source_revision = int(state.get("revision"))
 	if terrain != null:
 		terrain.free()
 	terrain = Node3D.new()
@@ -244,6 +247,9 @@ func _rebuild_world() -> void:
 	mission_setpiece = load("res://scripts/mission_setpieces.gd").new()
 	terrain.add_child(mission_setpiece)
 	mission_setpiece.call("setup",state)
+	support_setpiece = load("res://scripts/support_setpiece.gd").new()
+	terrain.add_child(support_setpiece)
+	support_setpiece.call("setup",state)
 	civilians = load("res://scripts/villagers_3d.gd").new()
 	terrain.add_child(civilians)
 	civilians.call("setup",state,site_type)
@@ -834,7 +840,7 @@ func _process(delta: float) -> void:
 	var d := minf(0.1,delta)
 	clock += d
 	var name := str(state.call("scenario_info").get("id"))
-	if name != source_mission:
+	if name != source_mission or int(state.get("revision")) != source_revision:
 		_rebuild_world()
 	spotlight_time = maxf(0.0,spotlight_time-d)
 	rescue_focus_time = maxf(0.0,rescue_focus_time-d)
@@ -848,6 +854,9 @@ func _process(delta: float) -> void:
 	var radius := 21.8
 	var desired := Vector3(sin(orbit_angle)*radius,8.9+sin(clock*0.2)*0.35,cos(orbit_angle)*radius)
 	var target := Vector3(0,1.55,0)
+	if str(state.get("status"))=="CHALLENGE":
+		target = Vector3(-8,1.2,6)
+		desired = target+Vector3(12,9,15)
 	if civilians != null and is_instance_valid(civilians) and int(civilians.call("movement_count")) > 0 and spotlight_time <= 0.0:
 		var active_rescue: Vector3 = civilians.call("first_in_transit_position")
 		target = target.lerp(active_rescue+Vector3(0,0.7,0),0.45)
@@ -887,7 +896,10 @@ func _process(delta: float) -> void:
 		_update_worker_lod()
 	_animate_environment(d)
 	if mission_setpiece != null and is_instance_valid(mission_setpiece):
+		mission_setpiece.visible = str(state.get("status"))!="CHALLENGE"
 		mission_setpiece.call("sync",d)
+	if support_setpiece != null and is_instance_valid(support_setpiece):
+		support_setpiece.call("sync")
 	_animate_work_sparks(d)
 
 func visible_workers() -> int:
@@ -1007,6 +1019,8 @@ func crossing_civilians() -> int:
 	return int(civilians.call("movement_count")) if civilians != null else 0
 
 func _physics_process(delta: float) -> void:
+	if state != null and bool(state.call("is_paused")):
+		return
 	# CharacterBody3D movement must happen on the fixed physics clock.
 	if state == null or terrain == null:
 		return

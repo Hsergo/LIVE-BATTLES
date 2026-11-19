@@ -1,49 +1,30 @@
-# MISSION SAUVETAGE LIVE V0.4 — Chantiers 3D et camera 360
+# MISSION SAUVETAGE LIVE 0.5.0
 
-Projet coopératif TikTok LIVE pour Windows (jeu distinct de l'ancien LIVE BATTLES).
+Jeu coopératif Windows pour TikTok LIVE, en 3D cartoon et au format vertical 9:16. Les spectateurs construisent, réparent et évacuent les habitants avec des commentaires gratuits.
 
-**Téléchargement :** onglet GitHub Actions > workflow `MISSION SAUVETAGE LIVE — Windows` > dernier job réussi > artefact `MISSION-SAUVETAGE-LIVE-WINDOWS`. Le fichier contient un installateur .exe et un ZIP portable.
+## Cette version
 
-Guide utilisateur : [Lancer le jeu, connecter TikTok et diffuser](docs/GUIDE_DEMARRAGE.md).
+- 15 missions, réparties entre pont, digue, phare, barrage et héliport ; objectifs secondaires, crises et repères 3D propres à chaque niveau.
+- Marathon de 1, 2 ou 3 heures de jeu actif, ou campagne classique. La durée se termine à la fin d'une manche ou d'une opération de soutien, sans couper un sauvetage en cours.
+- Trois opérations entre les missions : préparer le convoi, rétablir le courant, sécuriser le refuge. Chacune comporte trois étapes gratuites et un bonus pour la mission suivante.
+- Sauvegarde automatique toutes les 10 secondes, à la fermeture normale et au changement de mode ; reprise avec scores, progression et habitants en transit. Copie de secours si le dernier fichier est endommagé.
+- Pause organisateur et pause lors d'une déconnexion détectée ; la reconnexion ne supprime pas une pause manuelle.
+- Jusqu'à 500 participants comptabilisés, avec au plus 48 ouvriers visibles et plusieurs niveaux de détail. La fluidité doit être mesurée sur le PC de diffusion.
+- Personnages riggés Quaternius CC0, accessoires procéduraux, collisions et validation de l'arrivée physique avant attribution des points de sauvetage.
+- TikFinity Desktop en réception locale ; TikTools en option avec clé gardée uniquement en mémoire. Mode DEMO identifié, événements du simulateur refusés en LIVE.
 
-- 3 missions : pont, digue et phare ; progression de sauvetage et catastrophe distincte.
-- **Nouvelle scene 3D native Godot** : terrain, eau, habitations, grues, pont, digue et phare en volume, ouvriers animes, camera orbitale 360 degres.
-- Ouvriers actifs au pseudo du spectateur (maximum 48 visibles pour preserver les performances, jusqu'a 500 spectateurs inscrits et comptabilises).
-- Classements distincts : meilleurs constructeurs et meilleurs donateurs ; chaque action active visuellement l'ouvrier correspondant.
-- Commandes gratuites : `!join`, `!build`, `!repair`, `!rescue`, votes 1/2/3.
-- Cadeaux optionnels = matériaux de jeu, **pas de pari ni gain financier**.
-- DEMO autonome et clairement marquée ; LIVE sans pseudo fictif.
-- TikFinity Desktop (source locale prioritaire) ou TikTools API avec clé facultative.
-- Quatre agents décisionnels locaux : accueil, sécurité, directeur de mission et animation.
-- Auto-connexion TikFinity par pseudonyme public enregistré localement ; pas de mot de passe.
-- F9 son, F10 interface organisateur, F11 plein écran.
+## Utilisation
 
-**Important :** les tests automatisés et compilations Windows ne valident ni un vrai TikTok LIVE ni le rendu OBS sur le PC final. La bibliothèque TikTok est non officielle et sa licence doit être respectée.
+Installer `MISSION-SAUVETAGE-LIVE-0.5.0-Setup-x64.exe`, ou extraire **tout** le ZIP portable puis ouvrir `DEMARRER-MISSION-SAUVETAGE.cmd`. Le paquet contient le moteur et Node.js : aucun logiciel de développement à installer.
 
-**Commandes camera :** F7 activer/desactiver rotation 360 ; F6 basculer entre la scene 3D et l'ancienne vue 2D ; F9 son ; F10 panneau organisateur ; F11 plein ecran.
+Lire [le guide de démarrage](docs/GUIDE_DEMARRAGE.md). F10 ouvre la régie : mode, connexion, format du marathon, nouvelle session, reprise, pause et sauvegarde. Le changement de format s'applique après **NOUVELLE SESSION**.
 
-## Production personnages (en cours — aucune compilation automatique)
+Les cadeaux sont facultatifs et apportent des ressources de jeu. Aucun gain financier ni participation payante obligatoire. Les assistants du jeu fonctionnent par règles locales ; aucun service d'IA payant n'est nécessaire.
 
-Le dépôt est passé en **phase de direction artistique et de production des PNJ**. Le workflow Windows n'est plus exécuté sur chaque commit ; une compilation n'aura lieu que sur déclenchement manuel après validation du code et des assets.
+## Validation et livraison
 
-- `game/scripts/villagers_3d.gd` : adultes, enfants, aînés, vêtements, cheveux, bagages, animation de marche/attente et arrivée en zone sûre.
-- `game/scripts/world_3d.gd` : ouvriers dotés de casques, outils, gilets et badges nominatifs ; caméra 360° et plan de sauvetage rapproché.
-- `game/scripts/mission.gd` : association stable `person_index` ↔ villageois, tous les participants réels restent comptabilisés.
-- `game/tests/character_visual_rules.gd` : test de recette **préparé, non encore exécuté**.
-- `docs/DIRECTION_ARTISTIQUE_PERSONNAGES.md` : règles de qualité, origine des futurs modèles riggés et critères de sortie.
+[Recette et limites de la V0.5](docs/RECETTE_V05.md). Les simulations accélérées testent les règles de deux et trois heures, la reprise et les changements d'audience. Elles ne prouvent pas les performances graphiques d'une diffusion réelle de trois heures.
 
-Les nouveaux personnages restent **stylisés/procéduraux**. Un personnage professionnel texturé et riggé n'est pas encore importé, et aucun test de rendu final Windows n'a été effectué pour cette phase.
+Le workflow de sources teste chaque fichier de `game/tests` et le connecteur. Le workflow Windows teste les sources, exporte le jeu, lance le paquet portable, fabrique l'installateur, l'installe puis lance la version installée. Il conserve les journaux et empreintes SHA-256. Les exports sont limités au déclenchement manuel et à la branche dédiée `release/rescue-v0.5-20261119` ; les commits de production ordinaires ne compilent pas Windows.
 
-**Production riggée, sans compilation Windows :** modèle GLB CC0 importé, pilotage de Skeleton3D, collisions des ouvrages, évacuation suspendue si la structure est dangereuse. Voir docs/DIRECTION_ARTISTIQUE_PERSONNAGES.md et game/tests/art_production_qa.gd (test non exécuté).
-
-## Dernier lot de sources — 9 novembre 2026
-
-La branche de production comprend désormais 15 missions et un rythme adapté aux
-actions gratuites réellement acceptées. Les actes suivent aussi l'avancement du
-chantier et des évacuations. **12 suites Godot source réussies**, dont 49 parties
-simulées sans cadeau et un test de baisse de 500 à 5 participants actifs.
-
-Voir [rythme, mesures et limites](docs/RYTHME_ET_DIFFICULTE.md). Ce lot n'a pas été
-exporté en nouvel installateur Windows ; la V0.4 reste une livraison antérieure.
-Les états « test non exécuté » plus haut décrivent les étapes historiques de la
-production. Ils sont remplacés par ce bilan pour les suites qu'il recense.
+La V0.5 est une version à tester sur le PC cible. La validation d'un vrai LIVE TikTok, d'OBS et de la fluidité sur cet ordinateur reste à effectuer avant de qualifier le projet de version 1.0. Aucun certificat de signature Windows n'est inclus.

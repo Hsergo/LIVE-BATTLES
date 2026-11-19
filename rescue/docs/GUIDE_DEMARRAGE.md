@@ -1,114 +1,98 @@
-# Guide simple — MISSION SAUVETAGE LIVE V0.3
+# MISSION SAUVETAGE LIVE 0.5.0 — Guide de démarrage
 
-## 1. Installer sans logiciel de développement
+## 1. Installer et découvrir
 
-1. Extraire l'archive Windows téléchargée depuis GitHub Actions, puis ouvrir `MISSION-SAUVETAGE-LIVE-Setup-x64.exe`, ou ouvrir directement le ZIP portable.
-2. Suivre l'installateur (Windows 10/11 x64).
-3. Double-cliquer sur **MISSION SAUVETAGE LIVE**. Le lanceur ouvre automatiquement la passerelle locale puis le jeu.
-4. Par défaut, la **DEMO** s'anime seule pour permettre de découvrir le pont, les habitants, la pluie, les catastrophes et l'écran de fin. Aucun faux spectateur n'est présenté comme réel.
+Windows x64. Ouvrir `MISSION-SAUVETAGE-LIVE-0.5.0-Setup-x64.exe`, puis le raccourci du jeu. Avec le ZIP portable, faire « Extraire tout » avant de double-cliquer sur `DEMARRER-MISSION-SAUVETAGE.cmd`. Ne pas lancer le jeu à l'intérieur du ZIP.
 
-L'installation ne nécessite ni Godot, ni Blender, ni Node.js.
+Le lanceur démarre la passerelle et le jeu. Godot, Node.js et Blender ne sont pas à installer. Le jeu démarre en DEMO, sauf si une préférence LIVE mémorisée provoque une reconnexion. La DEMO utilise des actions simulées explicitement signalées à l'écran.
 
-## 2. Découvrir les trois actions
+En cas d'avertissement Windows, vérifier la provenance du fichier : cette version n'est pas signée numériquement. Les empreintes SHA-256 sont fournies avec la livraison. Aucune désactivation d'antivirus n'est nécessaire.
 
-- **CONSTRUIRE** : placer des sections du pont. Il doit être terminé à 100 % avant de laisser passer les habitants.
-- **REPARER** : renforcer la structure après les vagues et les tempêtes. Si l'intégrité descend trop bas, l'évacuation est dangereuse.
-- **EVACUER** : faire traverser un habitant lorsqu'un pont complet et suffisamment solide est disponible.
+## 2. Choisir la session
 
-En démonstration, ces commandes sont accessibles en bas de la fenêtre. Les commandes manuelles sont désactivées en LIVE pour éviter de les présenter comme des participations réelles.
+Ouvrir le panneau organisateur avec **F10**.
 
-## 3. Connecter TikTok LIVE
+| Commande | Effet |
+| --- | --- |
+| Format « Classique » | Les 15 missions se répètent sans durée globale imposée |
+| « Marathon 1 h / 2 h / 3 h » | Enchaîne missions et opérations de soutien jusqu'à la durée choisie |
+| NOUVELLE SESSION | Applique le format choisi et remet la progression à zéro, après confirmation |
+| REPRENDRE | Charge la dernière sauvegarde du mode actuellement choisi |
+| PAUSE / CONTINUER | Suspend ou reprend le jeu ; une panne de connexion peut maintenir la pause |
+| SAUVEGARDER | Enregistre immédiatement la progression courante |
+| MASQUER / F10 | Cache les commandes pour la diffusion |
 
-1. Lancer un véritable TikTok LIVE avec son compte TikTok, selon les possibilités de ce compte et les règles du service.
-2. Démarrer le jeu Windows ; sélectionner **MODE LIVE**.
-3. Saisir le **pseudonyme public** TikTok (sans @) et cliquer **CONNECTER LIVE**.
-4. Lire le statut. Ne considérer la connexion comme active que lorsque le jeu affiche une confirmation de connexion.
-5. Le jeu ne démarre sa mission LIVE qu'après le premier `!join` d'un spectateur, ou la réception de son cadeau reconnu.
-6. Le pseudonyme peut être mémorisé localement pour une prochaine ouverture ; ni mot de passe ni cookie ne sont enregistrés.
+**Le temps du marathon est du temps de jeu actif.** Les pauses et l'attente initiale d'un participant ne le consomment pas. Le bilan arrive à une fin de manche ou d'opération de soutien : la session peut donc dépasser légèrement la durée prévue. Un ordinateur très lent peut également allonger le temps réel.
 
-Le connecteur TikTok est communautaire, non officiel. Même si les tests automatiques fonctionnent, la connexion réelle dépend d'un LIVE autorisé et du fonctionnement actuel de TikTok. Aucun accès à un compte ou à ses paramètres n'est demandé.
+Les opérations de soutien alternent : convoi, courant, refuge. Suivre la commande affichée pour avancer plus vite. Les trois étapes donnent un bonus de ressources, de protection ou de solidité à la mission suivante. À l'expiration du délai de soutien, la campagne continue même si les trois étapes ne sont pas terminées. Les cadeaux pendant le soutien réservent des matériaux pour la suite ; ils ne valident pas les étapes.
 
-## 4. Commandes pour les spectateurs
+## 3. Préparer TikTok LIVE
+
+1. Ouvrir un véritable LIVE TikTok avec le compte créateur.
+2. Sur le même PC, démarrer **TikFinity Desktop** et le connecter à ce LIVE.
+3. Dans la régie du jeu, passer en **MODE LIVE**, sélectionner **TikFinity Desktop**, saisir le pseudonyme du créateur sans `@`, puis **CONNECTER LIVE**.
+4. Attendre la confirmation de réception des événements. Une simple connexion à l'application TikFinity n'est pas la preuve que le chat TikTok est reçu.
+5. Faire envoyer `!join`, puis `!build` depuis un compte spectateur. Vérifier son pseudo, les points et l'animation.
+
+Le jeu utilise la source déjà sélectionnée dans TikFinity Desktop ; saisir un pseudonyme dans le jeu ne change pas à lui seul le compte connecté dans TikFinity.
+
+Alternative : choisir **TikTools API**, saisir le pseudo et une clé valide. La clé reste en mémoire et doit être ressaisie après redémarrage. La disponibilité du service, ses quotas et son éventuel coût relèvent du fournisseur. Aucune souscription n'est effectuée par le jeu.
+
+La connexion réelle dépend de TikTok et du fournisseur. La passerelle lit les événements ; elle ne publie aucun message dans le chat TikTok. Le chatbot doit être configuré séparément dans l'application du fournisseur si souhaité.
+
+## 4. Jouer gratuitement
+
+Envoyer `!join` pour rejoindre, puis :
 
 | Commentaire | Action |
 | --- | --- |
-| `!join` | Rejoindre les sauveteurs, voir son pseudonyme |
-| `!build` / `!construire` | Construire |
-| `!repair` / `!reparer` | Réparer le pont |
-| `!rescue` / `!sauver` | Lancer un sauvetage |
-| `1` | Vote pour renforcer les piliers |
-| `2` | Vote pour accélérer la construction |
-| `3` | Vote pour prioriser l'évacuation |
+| `!build` / `!construire` | Construction ou étape de soutien |
+| `!repair` / `!reparer` | Réparation ou étape de soutien |
+| `!rescue` / `!sauver` | Départ en sécurité, après construction et sécurisation du passage |
+| `!special` | Action collective adaptée à la mission ; aussi affichée sous un nom spécifique |
+| `1`, `2`, `3` | Vote collectif |
+| `!regles` / `!aide` | Rappel des commandes à l'écran du jeu |
 
-Les commandes sont gratuites. Les répétitions trop rapprochées peuvent être ignorées pour préserver la fluidité et éviter le spam.
+Les répétitions trop rapprochées sont limitées. Un sauvetage donne ses points quand le personnage atteint effectivement la zone sûre, pas au moment où il se met en route.
 
-## 5. Cadeaux TikTok (facultatifs)
+Les cadeaux reconnus sont facultatifs : Rose +4, Finger Heart +12, Doughnut +40, Galaxy +120 unités fictives avant les plafonds du jeu. Ce sont des ressources de jeu, pas des prix en pièces ou en euros. La disponibilité et les noms des cadeaux dépendent de TikTok. Aucune dépense n'est nécessaire pour valider la recette des commandes gratuites.
 
-| Cadeau reconnu | Matériaux fictifs |
-| --- | ---: |
-| Rose | +4 |
-| Finger Heart | +12 |
-| Doughnut | +40 |
-| Galaxy | +120 |
+## 5. Reprendre après interruption
 
-Certains cadeaux donnent automatiquement des effets supplémentaires : hélicoptère, grue et digue temporaire. **Ce tableau ne représente PAS le prix des cadeaux en pièces TikTok ou en euros.** Leur disponibilité et leurs noms exacts peuvent varier. Le public peut participer et gagner sans achat.
+Une sauvegarde distincte existe pour DEMO et LIVE. Le jeu enregistre environ toutes les 10 secondes, à la fermeture normale et lors du changement de mode. Après un arrêt brutal, les dernières secondes depuis la sauvegarde peuvent être perdues.
 
-## 6. Capture et diffusion
+Relancer le jeu, passer en LIVE : sa sauvegarde est reprise automatiquement lorsqu'elle est valide. **REPRENDRE** permet aussi de recharger explicitement la sauvegarde du mode courant. Le message « COPIE DE SECOURS » indique que la sauvegarde précédente a servi après un fichier endommagé. Dans ce cas, un peu plus de progression peut être perdu.
 
-La fenêtre de jeu est conçue pour une vidéo **verticale 9:16, 720 × 1280**. Dans OBS ou un logiciel de diffusion compatible, capturer la fenêtre du jeu et choisir un canevas vertical. Tester le rendu, les performances, la lisibilité et le niveau sonore en privé avant la première diffusion.
+Les scores, le niveau, le marathon et les habitants en route sont restaurés. La partie reste en pause tant que la réception LIVE n'est pas confirmée. Si une pause manuelle avait été enregistrée, cliquer **CONTINUER** après la reconnexion. Les événements survenus pendant la déconnexion ne sont pas rejoués par le jeu.
 
-- **F10** : masquer/afficher les commandes de l'organisateur.
-- **F11** : plein écran / fenêtre.
-- **F9** : couper/réactiver les effets sonores originaux.
+Données locales : `%APPDATA%\Godot\app_userdata\MISSION SAUVETAGE LIVE`. Fermer le jeu avant toute manipulation de ce dossier. Les fichiers `session_live.json`, `session_demo.json` et leurs copies `.bak` contiennent les pseudos et scores ; ils ne contiennent pas de clé API. Pour repartir sans historique, choisir **NOUVELLE SESSION**, puis sauvegarder. Pour effacer aussi les anciennes copies, supprimer les fichiers de session correspondants et leurs `.bak` après fermeture.
 
-## 7. Si quelque chose ne fonctionne pas
+## 6. Diffuser
 
-- **Le jeu reste en attente :** sans participant LIVE, aucune mission réelle n'est lancée. Tester d'abord en DEMO.
-- **Les commentaires ne déclenchent rien :** contrôler le statut de connexion, puis vérifier que le vrai LIVE est actif.
-- **Le pont ne laisse pas passer les habitants :** il doit être construit à 100 % et suffisamment solide.
-- **Le jeu ne s'ouvre pas :** vérifier la présence du ZIP portable complet. Les journaux se trouvent dans `%LOCALAPPDATA%\MissionSauvetageLIVE\logs`.
-- **Windows SmartScreen affiche un avertissement :** le programme n'est pas encore signé numériquement ; ne désactiver aucune protection de sécurité sans vérifier le fichier et sa provenance.
+Le rendu est vertical, 720 × 1280 ; la fenêtre s'ouvre à 540 × 960. Capturer la fenêtre dans OBS ou le logiciel de diffusion autorisé pour le compte. Masquer la régie avec F10, puis vérifier que le cadre, le texte et le son sont lisibles depuis un téléphone.
 
-## 8. Limites de livraison
+- F6 : basculer entre la scène 3D et la vue 2D historique. La 3D présente les nouveaux objets de soutien.
+- F7 : arrêter ou relancer la rotation de caméra.
+- F9 : couper ou réactiver les effets sonores.
+- F10 : afficher ou masquer la régie.
+- F11 : plein écran ou fenêtre.
 
-Les tests automatisés contrôlent le gameplay et le démarrage Windows mais ne valident pas le rendu réel sur chaque PC ni un LIVE TikTok réel. Le lien avec TikTok reste expérimental. La commercialisation et la redistribution du connecteur doivent tenir compte des licences des dépendances, notamment de ses obligations de logiciel libre. Voir le code public et la documentation du fournisseur.
+Le contrôle visuel de développement a été réalisé avec le moteur Godot sous Linux. Le démarrage automatisé de Windows ne mesure pas les FPS du PC de diffusion. Faire un essai local avec OBS avant le premier LIVE public.
 
-## Nouvelle réception TikTok LIVE — TikFinity par défaut
+## 7. Diagnostic rapide
 
-Le connecteur historique `tiktok-live-connector` a été retiré de MISSION SAUVETAGE LIVE. La passerelle locale propose deux alternatives.
+| Symptôme | Vérification |
+| --- | --- |
+| HORS LIGNE / pause réseau | TikFinity ouvert et connecté au bon LIVE ; attendre un événement réel |
+| Aucun joueur | Envoyer `!join` depuis un vrai compte spectateur |
+| Les habitants restent en attente | Terminer le passage, réparer puis utiliser `!rescue` |
+| Reconnexion réussie mais jeu en pause | Dans F10, cliquer CONTINUER si la pause organisateur est active |
+| Aucune sauvegarde | Attendre une partie démarrée ou cliquer SAUVEGARDER ; vérifier le message affiché |
+| Port 8766 occupé | Fermer une ancienne version de la passerelle ou du jeu puis relancer ; le lanceur ne tue pas les autres applications |
+| Fichier absent / démarrage impossible | Réextraire tout le ZIP ou réinstaller ; conserver les journaux |
 
-**A — TikFinity Desktop (conseillé).** Installer l'application TikFinity Desktop sur le **même PC Windows** que le jeu, créer ou ouvrir son compte TikFinity puis la connecter à son LIVE TikTok actif. La documentation de TikFinity indique une passerelle locale `ws://localhost:21213/`. Dans le jeu, ouvrir les commandes (F10), sélectionner **TikFinity Desktop**, saisir le pseudonyme du créateur, puis cliquer **CONNECTER LIVE**. Si TikFinity n'est pas lancé, le jeu affiche un message de reconnexion et réessaie automatiquement. L'accès direct à TikFinity est nécessaire ; le jeu ne peut pas l'installer ou se connecter à ton compte à ta place.
+Journaux : `%LOCALAPPDATA%\MissionSauvetageLIVE\logs` (`game.log`, `bridge-out.log`, `bridge-error.log`). Pour signaler un problème, fournir le numéro de version, le message affiché et la séquence d'actions. Éviter de partager une clé API ou tout autre secret.
 
-**B — TikTools API (secours).** Sélectionner **TikTools API**, saisir le pseudo du créateur et une clé API TikTools. La clé est envoyée au pont local, reste **en mémoire uniquement**, et n'est jamais inscrite dans le fichier des préférences du jeu ni sur GitHub. La connexion distante est chiffrée en `wss://`. La disponibilité et la gratuité des offres doivent être vérifiées auprès de TikTools. Re-saisir la clé après redémarrage.
+## 8. Vérification finale sur le compte créateur
 
-**Signal de réussite réel :** le statut doit indiquer `TIKTOK LIVE CONNECTE VIA ... • EVENEMENTS RECUS`, et le jeu doit réagir à une commande envoyée depuis un vrai spectateur. Une simple liaison avec TikFinity Desktop ne constitue pas à elle seule la preuve que le LIVE est reçu. Le mode démonstration et les tests locaux ne constituent pas une validation TikTok LIVE.
-
-La passerelle n'envoie aucun message, achat ou action vers TikTok : elle ne fait **que lire** les événements destinés à la partie. Aucune dépense n'est nécessaire pour rejoindre, construire, réparer ou participer.
-
-## Agents de jeu intégrés
-
-Quatre assistants décisionnels locaux, sans appel à un service de génération payant :
-- **Accueil** : affiche un message avec le pseudonyme réel du nouvel arrivant, une fois par joueur.
-- **Sécurité** : prévient lorsqu'une tempête ou une structure fragile demande une réparation.
-- **Directeur de mission** : signale les objectifs en cours et la fin des sauvetages.
-- **Animation / personnalisation** : félicite les contributions et présente occasionnellement les cadeaux comme **optionnels**, sans obligation ni pression financière.
-
-Il s'agit d'une IA **à règles** : ses décisions utilisent l'état du jeu. Il ne s'agit pas de modèles génératifs ou de bots TikTok. Aucun faux spectateur ni faux cadeau n'est affiché.
-
-## Niveaux jouables
-
-1. **Le pont de la dernière chance** : construire le passage et faire traverser les habitants.
-2. **La digue de la tempête** : établir une protection face aux vagues et évacuer les riverains.
-3. **Le phare des naufrages** : réparer le phare et guider les bateaux jusqu'à la côte.
-
-Les niveaux disposent de décors distincts, de populations cibles et de coefficients de danger différents. Ils s'enchaînent automatiquement ; les vrais spectateurs restent inscrits, et les délais de commande sont remis à zéro à chaque mission.
-
-## Procédure de validation LIVE à réaliser sur ton compte
-
-1. Démarrer un véritable LIVE TikTok et vérifier sa réception dans TikFinity Desktop (ou TikTools).
-2. Dans le jeu, sélectionner la même source. Vérifier le statut de connexion puis les premiers événements.
-3. Depuis un autre compte spectateur, envoyer `!build`, `!repair`, `!rescue` et un vote `1`. Vérifier qu'ils provoquent des actions et que le pseudonyme s'affiche.
-4. **Facultatif** : envoyer un cadeau TikTok disponible (par exemple une Rose), vérifier l'attribution unique des matériaux et l'animation sans double crédit.
-5. Vérifier une reconnexion après une brève interruption de la source et la fluidité dans OBS en 9:16.
-
-La validation de cette dernière étape nécessite une diffusion active et ne peut être simulée comme si elle avait été effectuée.
+Tester une mission avec commentaires gratuits, une sauvegarde/reprise, une coupure/reconnexion de la source, puis la capture OBS. Un test de cadeau est facultatif et doit rester un choix explicite du créateur. Cette étape avec un vrai LIVE n'a pas été effectuée à distance et reste nécessaire pour valider l'exploitation du jeu.

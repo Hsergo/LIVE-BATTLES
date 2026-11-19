@@ -39,6 +39,6 @@ ensure(ui.includes('_draw_footer_3d()') && ui.includes('_draw_3d_leaderboards()'
 ensure(ui.includes('Vector2(32,1117)'),'rankings moved below the 3D play area');
 ensure(tests.includes('CharacterBody3D') && tests.includes('physics_frame'),'future runtime collision acceptance test prepared');
 ensure(/^\s*workflow_dispatch:\s*$/m.test(workerWorkflow),'manual Windows build remains possible');
-ensure(!/^\s{2}push:\s*$/m.test(workerWorkflow),'Windows compilation has no push trigger');
+ensure(workerWorkflow.includes('- release/rescue-v0.5-20261119') && !workerWorkflow.includes('- production/characters-and-rescue-3d'),'Windows builds limited to the dedicated authorized release branch');
 console.log('SOURCE PREFLIGHT PASS',checks.length,'checks');
 checks.forEach((item,i)=>console.log(String(i+1).padStart(2,'0')+'. '+item));
